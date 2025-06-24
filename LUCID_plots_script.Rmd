@@ -1,12 +1,13 @@
 ---
-title: "LUCID_plots_script"
+title: "LUCID_plots_script_final"
 author: "Christina Zhang"
-date: "2025-03-18"
+date: "2025-06-24"
 output: html_document
 ---
 
 ## Load librarys
-```{r Load settings, message=FALSE, warning=FALSE}
+
+```{r Load settings, message=FALSE, warning=FALSE, }
 # dependencies for deconstructSigs:
 # BiocManager::install("BSgenome")
 # BiocManager::install("BSgenome.Hsapiens.UCSC.hg19")
@@ -38,9 +39,10 @@ output_plot_dir<-"new_plots_CZ/"
 ```
 
 ## Load data
+
 ```{r load data}
 # supplementary from HSCLC RaDaR study
-excel_file="../supplement_LUCID_baseline_INVAR2_ChristinaZ_3Mar.xlsx"
+excel_file="../supplement_LUCID_baseline_INVAR2_ChristinaZ_02Apr.xlsx"
 demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA")
 
 mutLists<-read_excel(excel_file,sheet = "Table 7", skip = 2)
@@ -61,30 +63,48 @@ RaDaR_data<-read_excel("NSCLC_RaDaR_paper/1-s2.0-S0923753422001235-mmc2.xlsx",sh
 
 ```
 
+#### already updated in Apr02.
 
-# The tumour mutations number might need to update based on the mutList in the table 7.
-```{r}
-update_sum <- mutLists%>%group_by(Patient)%>%summarise(update_Tumour_mutations_number=n())
-demografics<-demografics %>% left_join(update_sum,by="Patient")
-print(demografics %>% select(Patient,Tumour_mutations_number,update_Tumour_mutations_number))
-# if update to table
-# writeData(demografics,excel_file,sheet = "patient_phenotype", startRow = 1, startCol = 1)
-# demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA",)
-mutLists%>%group_by(Panel_ID)%>%summarise(total=n())
-```
+<!-- # The tumour mutations number might need to update based on the mutList in the table 7. -->
 
-### panel design result summary
-```{bash}
-for file in KHdata/panel_design_results/batch*/*Covered.bed
-do 
-lines=$(grep -R "^chr" $file | wc -l); 
-echo $file covered loci : $lines ; 
-done
-```
+<!-- ```{r} -->
 
+<!-- update_sum <- mutLists%>%group_by(Patient)%>%summarise(update_Tumour_mutations_number=n()) -->
+
+<!-- demografics<-demografics %>% left_join(update_sum,by="Patient") -->
+
+<!-- print(demografics %>% select(Patient,Tumour_mutations_number,update_Tumour_mutations_number)) -->
+
+<!-- # if update to table -->
+
+<!-- # writeData(demografics,excel_file,sheet = "patient_phenotype", startRow = 1, startCol = 1) -->
+
+<!-- # demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA",) -->
+
+<!-- mutLists%>%group_by(Panel_ID)%>%summarise(total=n()) -->
+
+<!-- ``` -->
+
+<!-- ### panel design result summary -->
+
+<!-- ```{bash} -->
+
+<!-- for file in KHdata/panel_design_results/batch*/*Covered.bed -->
+
+<!-- do  -->
+
+<!-- lines=$(grep -R "^chr" $file | wc -l);  -->
+
+<!-- echo $file covered loci : $lines ;  -->
+
+<!-- done -->
+
+<!-- ``` -->
 
 # Fig. 1: Study design and distribution of tumour stages and subtypes
-## (B) Distribution of disease stage at diagnosis for 100 patients in the LUCID cohort. 60% of the patients were diagnosed with stage I disease at presentation. 
+
+## (B) Distribution of disease stage at diagnosis for 100 patients in the LUCID cohort. 60% of the patients were diagnosed with stage I disease at presentation.
+
 ```{r}
 demografics$Histological_subtype[demografics$Histological_subtype == "missing"] <- "Not_reported"
 # Compute total patients per Stage
@@ -113,6 +133,7 @@ ggplot(data=demografics, aes(x=Stage_diagnosis, fill=Histological_subtype)) +
 ```
 
 ## (C) Subtype distribution in the LUCID cohort.
+
 ```{r}
 # Compute the percentage of each Stage
 subtype_counts <- demografics %>%
@@ -135,8 +156,10 @@ ggplot(subtype_counts, aes(x = "", y = n, fill = Histological_subtype)) +
 
 ```
 
-# Fig. 2: Analysis of tumour whole exome sequencing data in NSCLC. 
-## (A) Genes commonly mutated in adenocarcinoma were identified as being significantly mutated from Cancer Genome Atlas (CGA) analysis (19). Mutations in these genes were identified in the present cohort (filled boxes) from whole exome sequencing data, for patients with adenocarcinoma and where tumour tissue WES was available (n=55 patients). 
+# Fig. 2: Analysis of tumour whole exome sequencing data in NSCLC.
+
+## (A) Genes commonly mutated in adenocarcinoma were identified as being significantly mutated from Cancer Genome Atlas (CGA) analysis (19). Mutations in these genes were identified in the present cohort (filled boxes) from whole exome sequencing data, for patients with adenocarcinoma and where tumour tissue WES was available (n=55 patients).
+
 ```{r}
 # function for filtering specify subtype and make the table for common mutation plotting
 common_mut <-function(demografics,mutLists,subtype,subtype_genes){
@@ -153,8 +176,8 @@ common_mut <-function(demografics,mutLists,subtype,subtype_genes){
                        Gene = subtype_genes,
                        KEEP.OUT.ATTRS = FALSE) %>%
   left_join(sub_mut, by = c("Patient", "Gene")) %>%
-  mutate(Value = ifelse(is.na(Value), 0, Value),
-         Gene = tolower(Gene)) # missing => 0
+  mutate(Value = ifelse(is.na(Value), 0, Value))
+         # Gene = tolower(Gene)) # missing => 0
   # change the gene names to include percentage and order the gene by percentage from low to high, exclude gene with 0%
   gene_percents <- df_plot %>%
     group_by(Gene) %>%
@@ -211,11 +234,12 @@ p1<- ggplot(df_plot, aes(x = Patient, y = Label, fill = factor(Value))) +
   geom_tile(color = "black") +  # black grid lines
   scale_fill_manual(values = c("0" = "white", "1" = "#3FAB3E")) +
   scale_x_discrete(position = "top") +  # Moves the x axis to the top
-  labs(subtitle = "Patient",x = "", y = "Gene", fill = "Mutation") +
+  labs(subtitle = "Patient with adenocarcinoma",x = "", y = "Gene", fill = "Mutation") +
   theme_minimal() +
   theme(
     axis.text.y = element_text(colour = "black",face = "italic",size=10),
-    plot.subtitle = element_text(hjust = 0.5,vjust=-5,size=13),   # Center the title at the top
+    plot.subtitle = element_text(hjust = 0.5,vjust=-2,size=14,family = "Helvetica"),   # Center the title at the top
+    axis.title.y = element_text(hjust = 0.5,vjust=0.5,size=14),
     axis.text.x = element_blank(),            # Remove x-axis labels (patient IDs)
     axis.ticks.x.top = element_blank(),           # Remove x-axis ticks
     legend.position = "none",                  # Remove legend
@@ -229,9 +253,8 @@ p1
 
 ```
 
+## (B) Genes commonly mutated in squamous cell carcinoma were identified as significantly mutated from CGA analysis (20). Mutations in these genes were identified in the present cohort (filled boxes) from whole exome sequencing data, for patients with squamous cell carcinoma and where tumour tissue WES was available (n=28 patients).
 
-
-## (B) Genes commonly mutated in squamous cell carcinoma were identified as significantly mutated from CGA analysis (20). Mutations in these genes were identified in the present cohort (filled boxes) from whole exome sequencing data, for patients with squamous cell carcinoma and where tumour tissue WES was available (n=28 patients). 
 ```{r}
 subtype="Squamous cell carcinoma"
 # Common squamous cell carcinoma genes, cited from Nature 489, 519–525 (2012)
@@ -243,11 +266,12 @@ p2<-ggplot(df_plot, aes(x = Patient, y =  Label, fill = factor(Value))) +
   geom_tile(color = "black") +  # black grid lines
   scale_fill_manual(values = c("0" = "white", "1" = "#3FAB3E")) +
   scale_x_discrete(position = "top") +  # Moves the x axis to the top
-  labs(x = "", y = "Gene", fill = "Mutation",subtitle = "Patient") +
+  labs(x = "", y = "Gene", fill = "Mutation",subtitle = "Patient with squamous cell carcinoma") +
   theme_minimal() +
   theme(
     axis.text.y = element_text(colour = "black",face = "italic",size=10),
-    plot.subtitle = element_text(hjust = 0.5,vjust=-5,size=13),   # Center the title at the top
+    plot.subtitle = element_text(hjust = 0.5,vjust=-2,size=14,family = "Helvetica"),   # Center the title at the top
+    axis.title.y = element_text(hjust = 0.5,vjust=0.5,size=14),
     axis.text.x = element_blank(),            # Remove x-axis labels (patient IDs)
     axis.ticks.x.top = element_blank(),           # Remove x-axis ticks
     legend.position = "none",                  # Remove legend
@@ -260,8 +284,10 @@ p2<-ggplot(df_plot, aes(x = Patient, y =  Label, fill = factor(Value))) +
 p2
 ```
 
-## (C) Mutation signatures were obtained using deconstructSigs (22) and their presence is shown (filled boxes) for the 90 patients in this study from whole exome sequencing data, for the patients where tissue WES data was available. 
+## (C) Mutation signatures were obtained using deconstructSigs (22) and their presence is shown (filled boxes) for the 90 patients in this study from whole exome sequencing data, for the patients where tissue WES data was available.
+
 ### Signature annotation using signatures.nature2013
+
 ```{r}
 # # formatting mutations
 # sigs.input <- mut.to.sigs.input(mut.ref = mutLists, 
@@ -305,7 +331,9 @@ signature_summary<-read.csv(paste0(output_plot_dir, "../signature_summary.csv"))
 ```
 
 ### Generate heatmap plot
+
 p3 delete. no need anymore
+
 ```{r}
 # # formatting table
 # df_plot <- signature_summary %>%
@@ -359,8 +387,10 @@ p3 delete. no need anymore
 # p3
 ```
 
-## remove D
+## D delete
+
 ## (D) A significant correlation was observed between the tumour mutation burden and the extent of smoking history (Pearson’s R = 0.38, p = 0.00023).
+
 ```{r}
 # #### PRIVATE CLINICAL DATA!
 # KH_CCTC <- read.csv("KHdata/CCTC_output/Main datasets_4/Inivata_INVAR_95BLcomb.csv")
@@ -433,15 +463,16 @@ p3 delete. no need anymore
 #   )
 # p4
 ```
+
 #### Combine Fig.2 plots
 
 ```{r}
-subtitle_lab<-c("A","B","C")
+subtitle_lab<-c("D","E")
 p_list <- list(p1,p2) # p3, p4
 for(i in c(1:2)){
 p_list[[i]] <-  p_list[[i]] +
   labs(title = subtitle_lab[i]) +  # Add label "A"
-  theme(plot.title = element_text(size = 12, face = "bold", hjust = -0.1, vjust = 0))  # Position 
+  theme(plot.title = element_text(size = 12, face = "bold", hjust = -0.4, vjust = 0))  # Position 
 }
 combined_plot <- p_list[[1]] + p_list[[2]] + 
   plot_layout(nrow = 1,ncol=2)  # Define layout with 2 rows
@@ -450,33 +481,32 @@ combined_plot
 ggsave(
   filename = "new_plots_CZ/Fig2AB_plot.png",  # File name
   plot = combined_plot,            # The plot object to save
-  width = 8,                      # Width in inches
-  height = 6,                     # Height in inches
+  width = 10,                      # Width in inches
+  height = 4,                     # Height in inches
   dpi = 300,                       # Resolution (dots per inch)
   units = "in"                     # Units of width and height
 )
 # 
-ggsave(
-  filename = "new_plots_CZ/Fig2C_plot.png",  # File name
-  plot = p4,            # The plot object to save
-  width = 7,                      # Width in inches
-  height = 5,                     # Height in inches
-  dpi = 300,                       # Resolution (dots per inch)
-  units = "in"                     # Units of width and height
-)
+# ggsave(
+#   filename = "new_plots_CZ/Fig2C_plot.png",  # File name
+#   plot = p4,            # The plot object to save
+#   width = 7,                      # Width in inches
+#   height = 5,                     # Height in inches
+#   dpi = 300,                       # Resolution (dots per inch)
+#   units = "in"                     # Units of width and height
+# )
 ```
 
+# Fig. 3: ctDNA detection in early-stage NSCLC by patient-specific sequencing panels and INVAR analysis.
 
+## (A) Specificities for the three custom capture sequencing panels in this study. Specificities were assessed twice. Once using other (non-matched) patients as controls, and once using an independent set of healthy controls.
 
-# Fig. 3: ctDNA detection in early-stage NSCLC by patient-specific sequencing panels and INVAR analysis. 
-## (A) Specificities for the three custom capture sequencing panels in this study. Specificities were assessed twice. Once using other (non-matched) patients as controls, and once using an independent set of healthy controls. 
 ```{r}
 ## made in excel.
   
 ```
 
-
-## (B) Informative Reads (IR) are plotted against the Integrated Mutant Allele Fraction (IMAF) which estimates the ctDNA levels in each sample. Sensitivity of the INVAR pipeline increases with increasing IR and the threshold for ctDNA detection can be roughly estimated as 1/IR (indicated by dashed diagonal line). Samples with less than 20,000 IR (dark grey box) allow only for limited detection sensitivity. Samples in which ctDNA was detected by INVAR are shown in green. Undetected samples are shown in grey. 
+## (B) Informative Reads (IR) are plotted against the Integrated Mutant Allele Fraction (IMAF) which estimates the ctDNA levels in each sample. Sensitivity of the INVAR pipeline increases with increasing IR and the threshold for ctDNA detection can be roughly estimated as 1/IR (indicated by dashed diagonal line). Samples with less than 20,000 IR (dark grey box) allow only for limited detection sensitivity. Samples in which ctDNA was detected by INVAR are shown in green. Undetected samples are shown in grey.
 
 ```{r}
 # Create a working data frame with the needed variables and a detection status.
@@ -542,6 +572,7 @@ p1<-ggplot(detection_data, aes(x = IR, y = plot_IMAF)) +
   ) +
   theme_minimal() +
   theme(
+    axis.title = element_text(hjust = 0.5,size=14,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(), 
     legend.position.inside = c(0.15, 0.9),
@@ -557,8 +588,7 @@ p1<-ggplot(detection_data, aes(x = IR, y = plot_IMAF)) +
 p1
 ```
 
-
-## (C) Cancer genomes detected in the analysis of plasma samples. The total number of cancer genomes represented in each sample analysed was estimated for patients with detected ctDNA.  In many samples, ctDNA was detected even though less than 0.1 of a single cancer genome was present, and would likely not be detected without the analysis of a greater number of confirmed markers. 
+## (C) Cancer genomes detected in the analysis of plasma samples. The total number of cancer genomes represented in each sample analysed was estimated for patients with detected ctDNA. In many samples, ctDNA was detected even though less than 0.1 of a single cancer genome was present, and would likely not be detected without the analysis of a greater number of confirmed markers.
 
 ```{r}
 # cancer genomes vs ctDNA fraction (IMAF)
@@ -589,7 +619,7 @@ p2<-ggplot(detection_data, aes(x = PATIENT)) +
   # Customize colors and labels
   scale_color_manual(values = c("Yes" = "#3FAB3E", "No" = "grey"),name = "Detection at specificity > 95%") +
   labs(
-    x = "Samples, ordered by ctDNA fraction",
+    x = "Samples, ordered by ctDNA fraction (IMAF)",
     y = "Cancer genomes in sample",
     
   ) +
@@ -597,6 +627,7 @@ p2<-ggplot(detection_data, aes(x = PATIENT)) +
   theme(
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(), 
+    axis.title = element_text(hjust = 0.5,size=14,family = "Helvetica"), 
     legend.position.inside = c(0.2, 0.9),
     legend.position = c("left","top"),
     legend.background = element_rect(fill = "white", color = NA),
@@ -606,7 +637,6 @@ p2<-ggplot(detection_data, aes(x = PATIENT)) +
   )
 p2
 ```
-
 
 ## (D) ctDNA tumour fractions, in parts per million (ppm), detected in baseline plasma samples according to disease stage at diagnosis, for the 90 patients analysed with INVAR (55, 18 and 17 patients with stage I, II and III disease respectively). Median ctDNA levels per stage are indicated with vertical dotted lines.
 
@@ -657,7 +687,7 @@ p[[i]] <- ggplot(sub_stage_data, aes(x = IMAF_ppm, fill = Detected)) +
   # Manually set fill colors for "Yes" and "No"
   scale_fill_manual(values = c("Yes" = colours[i], "No" = "#4F575EE0"), name = "Detected") +
   labs(
-    x = "Tumour Fraction (ppm)",
+    x = "ctDNA fraction (IMAF) in ppm",
     y = stages[i],
     title = NULL,
     fill = "Detected"  # Legend title
@@ -665,6 +695,7 @@ p[[i]] <- ggplot(sub_stage_data, aes(x = IMAF_ppm, fill = Detected)) +
   geom_vline(xintercept = mid_ppm, linetype = "dashed", size = 0.5, color = "black") +
   theme_minimal() +
   theme(
+    axis.title = element_text(hjust = 0.5,size=14,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     legend.position = "right",
@@ -685,7 +716,7 @@ p3
 ```
 
 ```{r}
-subtitle_lab<-c("B","C","D")
+subtitle_lab<-c("A","B","C")
 p_list <- list(p1,p2,p3[[1]],p3[[2]],p3[[3]]) 
 for(i in c(1:3)){
 p_list[[i]] <-  p_list[[i]] +
@@ -696,36 +727,40 @@ p_list[[i]] <-  p_list[[i]] +
 
 
 design <- c(
-  area(t = 1, l = 1, b = 1, r = 1),  # Placeholder for A (Row 1, Column 1)
+  #area(t = 1, l = 1, b = 1, r = 1),  # Plot B (Row 1, Column 2)
+  area(t = 1, l = 1, b = 1, r = 1),  # Plot B (Row 1, Column 2)
   area(t = 1, l = 2, b = 1, r = 2),  # Plot B (Row 1, Column 2)
   area(t = 2, l = 1, b = 2, r = 2),  # Plot C (Row 2, spans all columns)
   area(t = 3, l = 1, b = 3, r = 2),   # Plot D (Row 3, spans all columns)
   area(t = 4, l = 1, b = 4, r = 2),   # Plot D (Row 3, spans all columns)
   area(t = 5, l = 1, b = 5, r = 2)   # Plot D (Row 3, spans all columns)
 )
-combined_plot<-plot_spacer()+p_list[[1]]+ p_list[[2]] + p_list[[3]] + p_list[[4]] + p_list[[5]] + plot_layout(design = design,heights =c(4,4,1,1,1),widths = c(2,2,4,4,4,4))
+combined_plot<-p_list[[1]]+ plot_spacer()+p_list[[2]] + p_list[[3]] + p_list[[4]] + p_list[[5]] + plot_layout(design = design,heights =c(4,5,1,1,1),widths = c(2,1,4,4,4,4))
 
 
 ggsave(
   filename = paste0("new_plots_CZ/Fig3","BCD","_plot.png"),  # File name
   plot = combined_plot,            # The plot object to save
   width = 10,                      # Width in inches
-  height = 12,                     # Height in inches
+  height = 13,                     # Height in inches
   dpi = 300,                       # Resolution (dots per inch)
   units = "in"                     # Units of width and height
 )
 
 ```
 
+# Fig. 4: InVisionFirst®-Lung assay analysis in 27 patients with NSCLC.
 
-# Fig. 4: InVisionFirst®-Lung assay analysis in 27 patients with NSCLC. 
 ## (A) A total of 27 mutations were identified; most alterations were identified in TP53 (37%), followed by KRAS (22%). Where matched tissue data was available, we confirmed 70% (14/20) of these mutations. Of the remaining 6 mutations, one was confirmed to be a germline variant, two splice variants were not covered in our analysis, and three were not detected in tumour whole exome sequencing.
+
 keep original plot. But need to change the gene names to small right?
+
 ```{r}
 
 ```
 
 ## Fig 4B in the excel file (Fig4b)
+
 ```{r}
 sum_table<-cbind(
   rbind(nrow(demografics[demografics$InVisionFirst..Lung_detection=="Yes" & demografics$INVAR2_detection == "Yes",]),
@@ -751,6 +786,7 @@ sum_table
 ## (C) ctDNA fraction correlation between INVAR and InVisionFirst®-Lung. 10 samples were detected by both platforms; yielding a correlation in ctDNA fraction of 0.92 (Spearman’s r, p = 4.7x10-4).
 
 THere is no problem with this plot. The previous one has a case that both AF=0, but the new result doesn't have such case
+
 ```{r}
 df_plot <- demografics %>% 
   filter(INVAR2_detection!="Not analysed",InVisionFirst..Lung_detection!="Not analysed")%>%
@@ -770,6 +806,61 @@ df_plot <- df_plot %>%
 # Create the plot
 p1<-ggplot(df_plot, aes(x = InVisionFirst..Lung_mean_AF, y = INVAR2_fraction_IMAF,group=Detection_either)) +
   geom_point(color = "#00876c",size=3) +  # Green dots
+  labs(
+    x = "cfDNA fraction by Lung Assay \n (mean allele fraction)", # remove InVisionFirst®-
+    y = "cfDNA fraction by hybrid \n capture and INVAR (IMAF)",
+    title = NULL # C
+  ) +
+  scale_x_log10(
+    limits = c(9e-7,0.1),
+    breaks = c(1e-6, 1e-4, 0.01),
+    labels = c("ND",  "1e-4", "0.01")
+  ) +
+    scale_y_log10(
+    limits = c(9e-7,0.1),
+    breaks = c(1e-6, 1e-4, 0.01),
+    labels = c("ND",  "1e-4", "0.01")
+  ) +
+  geom_vline(xintercept = 0.5e-3, linetype = "dashed", size = 0.5, color = "grey") +
+  geom_hline(yintercept = 0.5e-3, linetype = "dashed", size = 0.5, color = "grey") +
+  #geom_smooth(method = "lm", color = "black", linetype = "dashed", se = FALSE) +  # Dashed regression line
+  stat_function(
+    fun = function(x) x, 
+    linetype = "dashed", 
+    color = "black"
+  ) +
+  #annotate("text", x = 1e-4, y = Inf, label = cor_label, hjust = 0.8, vjust = 1.5, size = 4, color = "black") +  # Add correlation stats
+  theme_minimal() +
+    theme(
+    axis.title = element_text(hjust = 0.5,size=14,family = "Helvetica"), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position.inside = c(0.3, 0.8),
+    legend.position = c("left","top"),
+    legend.background = element_rect(fill = "white", color = NA),
+    axis.line = element_line(color = "black"), # add x axis line
+    axis.ticks = element_line(color = "black"),
+    plot.title = element_text(size = 12, face = "bold", hjust = -0.05, vjust = 0),
+    plot.margin = unit(c(0,0,0,20), "pt"))  # Position
+
+
+ggsave(
+  filename = "new_plots_CZ/Fig4C_plot.png",  # File name
+  plot = p1,            # The plot object to save
+  width = 4,                      # Width in inches
+  height = 3.9,                     # Height in inches
+  dpi = 300,                       # Resolution (dots per inch)
+  units = "in"                     # Units of width and height
+)
+p1
+```
+
+If mark the both not detected as empty circle?
+
+```{r}
+ggplot(df_plot%>%filter(Detection_either==T), aes(x = InVisionFirst..Lung_mean_AF, y = INVAR2_fraction_IMAF,group=Detection_either)) +
+  geom_point(color = "#00876c",size=3) +  # Green dots
+  geom_point(data = df_plot%>%filter(Detection_either==F), color = "red",size=3,shape=1) +  # Green dots
   labs(
     x = "cfDNA fraction by InVisionFirst®-Lung \n (mean allele fraction)",
     y = "cfDNA fraction by hybrid \n capture and INVAR (IMAF)",
@@ -806,20 +897,12 @@ p1<-ggplot(df_plot, aes(x = InVisionFirst..Lung_mean_AF, y = INVAR2_fraction_IMA
     plot.title = element_text(size = 12, face = "bold", hjust = -0.05, vjust = 0),
         plot.margin = unit(c(0,0,0,20), "pt"))  # Position
 
-
-ggsave(
-  filename = "new_plots_CZ/Fig4C_plot.png",  # File name
-  plot = p1,            # The plot object to save
-  width = 4,                      # Width in inches
-  height = 3.9,                     # Height in inches
-  dpi = 300,                       # Resolution (dots per inch)
-  units = "in"                     # Units of width and height
-)
 ```
 
+# Fig. 5: Summary of ctDNA levels and patient demographics.
 
-# Fig. 5: Summary of ctDNA levels and patient demographics. 
-## (A) In total, ctDNA was detected in 66 of 100 samples by at least one of the two analysis approaches. Patients are ordered by stage at diagnosis and detection/ctDNA levels; patient demographics are indicated below their respective ctDNA fraction. Detection rates are reported in the text. 
+## (A) In total, ctDNA was detected in 66 of 100 samples by at least one of the two analysis approaches. Patients are ordered by stage at diagnosis and detection/ctDNA levels; patient demographics are indicated below their respective ctDNA fraction. Detection rates are reported in the text.
+
 ```{r}
 # select columns for plotting
 demoplots<-demografics%>% 
@@ -857,7 +940,6 @@ color_mapping <- c(
 )
 ```
 
-
 ```{r}
 # complex heatmap
 # Add a small epsilon to avoid log(0) and handle zeros
@@ -876,7 +958,7 @@ ha1 <- HeatmapAnnotation(
     )
   ),
   annotation_name_side = "left",
-  annotation_label = "ctDNA fraction",
+  annotation_label = "ctDNA fraction (IMAF)",
   annotation_height = unit(7, "cm")
 )
 # add legend for barplot
@@ -915,7 +997,7 @@ pd_final <- packLegend(list = list(lg_list[[1]],lg_list[[2]],lg_list[[3]],pd_gro
 # heatmap
 ht <- Heatmap(matrix_data,  row_names_side = "left",heatmap_width = unit(20, "cm"),
               row_names_gp = gpar(fontsize = 9),row_labels = c("Stage",
-          "Pathology","Treatment","Smoking status","Age","Sex","INVAR",expression("InVisionFirst"^"\u00AE"~"-Lung")),
+          "Pathology","Treatment","Smoking status","Age","Sex","INVAR","Lung assay"), #remove expression("InVisionFirst"^"\u00AE"~"-Lung")
         top_annotation = ha1,
         show_heatmap_legend = FALSE,
         col=color_mapping,rect_gp = grid::gpar(col = "black", lwd = 0.2),
@@ -933,9 +1015,8 @@ dev.off()
 #ht_gap = unit(20, "mm"), row_km = 2, 
 ```
 
+## (B) Boxplot of ctDNA levels by stage, showing only cases in which ctDNA was detected. Number detected/number tested are indicated on the figure for each stage.
 
-
-## (B) Boxplot of ctDNA levels by stage, showing only cases in which ctDNA was detected. Number detected/number tested are indicated on the figure for each stage. 
 ```{r}
 # Don't know is only INVAR or combine both INVAR and Invision. If combined, do we choose the highest ctDNA fraction for each patient?
 ## 1. only INVAR result
@@ -959,7 +1040,6 @@ stage_anno <- total_stage  %>% left_join(detected_stage,by="Stage_group")%>%
 
 box_plot <- box_plot %>% left_join(stage_anno,by="Stage_group")
 ```
-
 
 ```{r}
 # 2. use the max AF of both INVAR and Invision and choose the highest ctDNA fraction bettween these two.
@@ -1000,8 +1080,8 @@ p <- ggplot(box_plot, aes(x = anno, y = ctDNAfraction, fill = anno)) +
   geom_boxplot(fill="#c7e9c0",alpha=0.7) +  
   geom_jitter(width = 0.2, color = "black") +
   labs(
-    x = "Stage",
-    y = "ctDNA fraction",
+    x = NULL,
+    y = "ctDNA fraction (IMAF)",
     title = NULL
   ) +
     scale_y_log10(
@@ -1011,6 +1091,8 @@ p <- ggplot(box_plot, aes(x = anno, y = ctDNAfraction, fill = anno)) +
   ) +
   theme_minimal()+
     theme(
+    axis.title = element_text(hjust = 0.5,size=13,family = "Helvetica"), 
+    axis.text.x = element_text(hjust = 0.5,size=12,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.line = element_line(color = "black"), # add x axis line
@@ -1024,13 +1106,14 @@ p1<-p + stat_compare_means(
   comparisons = list(c(stage_anno$anno[1],stage_anno$anno[2]),c(stage_anno$anno[1],stage_anno$anno[3]),c(stage_anno$anno[2],stage_anno$anno[3])),
   #comparisons = list(c("I", "II"),  c("I", "III"), c("II", "III")),  # Compare all pairs
   label = "p.format",  # Show p-value in format (e.g., "p = 0.01")
-  label.y = c(-0.3, 0.2, 0.8)  # Adjust y-position of p-value labels
+  label.y = c(-0.3, 0.2, 0.8),  # Adjust y-position of p-value labels
 )
 p1
 ```
+
 stage1 instead of I
 
-## (C) Correlation between ctDNA and tumour volume for patients with stage I disease (red dots) and stage II disease (turquoise triangles) in cases where ctDNA was detected and tumour measurements were available (n=42). Pearson’s R = 0.62, p = 1x10-5. 
+## (C) Correlation between ctDNA and tumour volume for patients with stage I disease (red dots) and stage II disease (turquoise triangles) in cases where ctDNA was detected and tumour measurements were available (n=42). Pearson’s R = 0.62, p = 1x10-5.
 
 ```{r}
 volume_plot <- demografics %>%
@@ -1081,11 +1164,11 @@ p2<-ggplot(volume_plot, aes(x = T_volume_cm3, y = ctDNAfraction)) +
     color = "#19CFCF"
   ) +
   geom_smooth(method = "lm", se = TRUE, color = "#3E3EA3") +  # regression line without standard error shading
-  annotate("text", x = 0.2, y = Inf, label = cor_label, hjust = 0, vjust = 1.5, size = 5, color = "black") +  # Add correlation stats
-  annotate("text", x = 0.2, y = Inf, label = lm_label, hjust = 0, vjust = 4, size = 5, color = "black")+
+  annotate("text", x = 0.2, y = Inf, label = cor_label, hjust = 0, vjust = 1.5, size = 4, color = "black") +  # Add correlation stats
+  annotate("text", x = 0.2, y = Inf, label = lm_label, hjust = 0, vjust = 4, size = 4, color = "black")+
   labs(
-    x = "Tumor volume cm3",
-    y = "ctDNA fraction"
+    x = expression("Tumor volume (cm"^"3"*")"),
+    y = "ctDNA fraction (IMAF)"
     #title = "In log scale for correlation test"
   ) +
   scale_x_log10(
@@ -1100,6 +1183,7 @@ p2<-ggplot(volume_plot, aes(x = T_volume_cm3, y = ctDNAfraction)) +
   scale_fill_manual(values = c("I" = "#E36014", "II" = "#19CFCF"), name = "Stage") +
   theme_minimal() +
   theme(
+    axis.title = element_text(hjust = 0.5,size=13,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.line = element_line(color = "black"), # add x axis line
@@ -1134,10 +1218,8 @@ ggsave(
 )
 ```
 
+add not detected dots fig5, empty circles also add stage III to see maybe the volume not correlate
 
-add not detected dots fig5, empty circles
-also add stage III to see
-maybe the volume not correlate
 ```{r}
 volume_plot <- demografics %>%
   mutate(Stage_group = case_when(
@@ -1260,21 +1342,9 @@ p1
 
 ```
 
-
 # Fig. 6: Analysis of patient outcomes and ctDNA detection
-Kaplan-Meier plots showing overall survival (OS) and the time that patients remained free from relapse of the original primary tumour (FFR). FFR analysis considers as events only clinical relapse of the original primary tumour, and patient data is right-censored when patients present with a second primary cancer that progresses or upon death from causes other than relapse of the first primary disease. Analyses of cancer-free survival considering all cancer or death events (CFS), and additional OS analysis, are presented in fig. S4A and B) Comparison of FFR time (A) and OS (B) for patients who underwent non-surgical treatment (red, dotted) vs. surgical treatment (blue). Median FFR time of 578 days vs. not reached (Log-Rank Test p-value <0.0001); HR for non-surgical treatment: 4.35, p-value <0.0001). Median OS time of 893 days vs. not reached (Log-Rank Test p-value 0.002); HR for non-surgical treatment: 2.71, p-value 0.002). C+D) Comparison of FFR time (C) and OS (D) for patients with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time of 990 days vs. not reached (Log-Rank Test p-value 0.001); HR for ctDNA detected: 5.20, p-value 0.002). Median OS time not reached for both (Log-Rank Test p-value 0.036); HR for ctDNA detected: 2.25, p-value 0.042. E) Comparison of FFR time for patients who underwent surgery, with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time not reached for both (Log-Rank Test p-value 0.004); HR for ctDNA detected: 11.02, p-value 0.021). F) Comparison of FFR time for patients with adenocarcinoma, with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time of 686 days vs. not reached (Log-Rank Test p-value 0.0003); HR for ctDNA detected: 9.34, p-value 0.003). See fig. S4 for additional OS and CFS comparisons. 
-```{r}
-# Survival info from NSCLC_RaDaR_paper
-survival_plot <- RaDaR_data %>% 
-  mutate(Patient=as.character(Patient)) %>% 
-  right_join(demografics%>%select(Patient,Treatment_category,Histological_subtype,Detection_either),by="Patient") %>%
-  mutate(Treatment_category=factor(Treatment_category,levels=c("Surgical (with or without adjuvant treatment)", "Non-surgical (radiotherapy +/- chemotherapy)")),
-         ctDNA=ifelse(Detection_either==FALSE,"ctDNA negative at baseline","ctDNA positive at baseline"))%>%
-  mutate(ctDNA=factor(ctDNA,levels = c("ctDNA negative at baseline","ctDNA positive at baseline")))%>%
-  select(Patient, FFR_event = `FFR event (freedom from recurrence)`,FFR_date = `FFR date`,
-         OS_event = `OS event (overall survival)`,OS_date = `OS date`,
-         Histological_subtype, Treatment_category, ctDNA)
-```
+
+Kaplan-Meier plots showing overall survival (OS) and the time that patients remained free from relapse of the original primary tumour (FFR). FFR analysis considers as events only clinical relapse of the original primary tumour, and patient data is right-censored when patients present with a second primary cancer that progresses or upon death from causes other than relapse of the first primary disease. Analyses of cancer-free survival considering all cancer or death events (CFS), and additional OS analysis, are presented in fig. S4A and B) Comparison of FFR time (A) and OS (B) for patients who underwent non-surgical treatment (red, dotted) vs. surgical treatment (blue). Median FFR time of 578 days vs. not reached (Log-Rank Test p-value \<0.0001); HR for non-surgical treatment: 4.35, p-value \<0.0001). Median OS time of 893 days vs. not reached (Log-Rank Test p-value 0.002); HR for non-surgical treatment: 2.71, p-value 0.002). C+D) Comparison of FFR time (C) and OS (D) for patients with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time of 990 days vs. not reached (Log-Rank Test p-value 0.001); HR for ctDNA detected: 5.20, p-value 0.002). Median OS time not reached for both (Log-Rank Test p-value 0.036); HR for ctDNA detected: 2.25, p-value 0.042. E) Comparison of FFR time for patients who underwent surgery, with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time not reached for both (Log-Rank Test p-value 0.004); HR for ctDNA detected: 11.02, p-value 0.021). F) Comparison of FFR time for patients with adenocarcinoma, with ctDNA detected (red, dotted) vs. not detected (blue). Median FFR time of 686 days vs. not reached (Log-Rank Test p-value 0.0003); HR for ctDNA detected: 9.34, p-value 0.003). See fig. S4 for additional OS and CFS comparisons.
 
 ```{r}
 # function for making plot
@@ -1331,9 +1401,28 @@ final_plot <- p$plot +
   
   return(final_plot)
 }
+```
+
+```{r}
+# Survival info from NSCLC_RaDaR_paper
+survival_plot <- RaDaR_data %>% 
+  mutate(Patient=as.character(Patient)) %>% 
+  right_join(demografics%>%select(Patient,Treatment_category,Histological_subtype,Detection_either),by="Patient") %>%
+  mutate(Treatment_category=factor(Treatment_category,levels=c("Surgical (with or without adjuvant treatment)", "Non-surgical (radiotherapy +/- chemotherapy)")),
+         ctDNA=ifelse(Detection_either==FALSE,"ctDNA negative at baseline","ctDNA positive at baseline"))%>%
+  mutate(ctDNA=factor(ctDNA,levels = c("ctDNA negative at baseline","ctDNA positive at baseline")))%>%
+  select(Patient, FFR_event = `FFR event (freedom from recurrence)`,FFR_date = `FFR date`,
+         OS_event = `OS event (overall survival)`,OS_date = `OS date`,
+         Histological_subtype, Treatment_category, ctDNA)
+
+# plots
 subtitle_lab<-c("A","B","C","D","E","F")
 # subplot ABCD
 y_labels <-c("Free From Relapse (FFR)","Overall Survival (OS)")
+# median dates and hazard ratios
+median_hr<-matrix(NA, nrow = 6, ncol = 4)
+colnames(median_hr)<- c("med1","med2","HR","P")
+rownames(median_hr)<-subtitle_lab
 p<-list()
 for(i in 1:4){
   if(i %in% c(1,3)){
@@ -1346,11 +1435,19 @@ for(i in 1:4){
   }
   if(i %in% c(1,2)){
     fit <- survfit(surv_object ~ Treatment_category, data = survival_plot)
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ Treatment_category, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[i,]<-c(median_survs,HR)
     p[[i]] <- make_survplot(survival_plot,levels(survival_plot$Treatment_category),fit,ylabel,subtitle_lab[i])
 
   }
   if(i %in% c(3,4)){
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot)
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[i,]<-c(median_survs,HR)
     p[[i]] <- make_survplot(survival_plot,legend_labs=levels(survival_plot$ctDNA),fit,ylabel,subtitle_lab[i])
   }
 }
@@ -1358,11 +1455,19 @@ for(i in 1:4){
 survival_plot_E <- survival_plot%>%filter(Treatment_category=="Surgical (with or without adjuvant treatment)")
 surv_object <- Surv(time = survival_plot_E$FFR_date, event = survival_plot_E$FFR_event)
 fit <- survfit(surv_object ~ ctDNA, data = survival_plot_E)
+median_survs<- summary(fit)$table[,"median"] 
+cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_E)
+HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+median_hr[5,]<-c(median_survs,HR)
 p[[5]]<-make_survplot(survival_plot_E,legend_labs=levels(survival_plot_E$ctDNA),fit,y_labels[1],subtitle_lab[5])
 
 survival_plot_F<- survival_plot%>%filter(Histological_subtype=="Adenocarcinoma")
 surv_object <- Surv(time = survival_plot_F$FFR_date, event = survival_plot_F$FFR_event)
 fit <- survfit(surv_object ~ ctDNA, data = survival_plot_F)
+median_survs<- summary(fit)$table[,"median"] 
+cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_F)
+HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+median_hr[6,]<-c(median_survs,HR)
 p[[6]]<-make_survplot(survival_plot_F,legend_labs=levels(survival_plot_F$ctDNA),fit,y_labels[1],subtitle_lab[6])
 
 combined_plot <- p[[1]]+p[[2]]+p[[3]]+p[[4]]+p[[5]]+p[[6]]+
@@ -1378,9 +1483,12 @@ ggsave(
   dpi = 300,                       # Resolution (dots per inch)
   units = "in"                     # Units of width and height
 )
+
+print(median_hr)
 ```
 
-# change to all ctDNA fraction > 0 instead of detection==T
+# change to all ctDNA fraction \> 0 instead of detection==T
+
 ```{r}
 # Survival info from NSCLC_RaDaR_paper
 survival_plot_all_IMAF <- RaDaR_data %>% 
@@ -1454,17 +1562,22 @@ ggsave(
 )
 ```
 
+# Supplementary:
 
-# Supplementary: 
 ## Fig. S1: remove
-### (A) Distribution of the number of mutations identified in exome-wide sequencing of tumour samples, for patients with different smoking status/history. Current and former smokers had significantly more mutations identified in their tumour tissue samples compared to never smokers. 
+
+### (A) Distribution of the number of mutations identified in exome-wide sequencing of tumour samples, for patients with different smoking status/history. Current and former smokers had significantly more mutations identified in their tumour tissue samples compared to never smokers.
+
 ### (B) Tumour mutations per patient plotted against the age of the patient. No significant correlation was observed.
+
 ```{r}
 
 ```
 
-## Fig. S2: 
-### (A) Violin plot of ctDNA fraction by stage of disease at diagnosis shows increasing ctDNA fraction with increasing stage. Horizontal lines indicate median levels. Data includes all 100 patients. 
+## Fig. S2:
+
+### (A) Violin plot of ctDNA fraction by stage of disease at diagnosis shows increasing ctDNA fraction with increasing stage. Horizontal lines indicate median levels. Data includes all 100 patients.
+
 ```{r}
 # ctDNA fraction = max AF from InVision and INVAR
 violin_plot <- demografics %>%
@@ -1493,7 +1606,7 @@ p1 <- ggplot(violin_plot, aes(x = Stage_group, y = ctDNAfraction, fill = Stage_g
   geom_jitter(width = 0.2, color = "black") +
   labs(
     x = "Stage",
-    y = "ctDNA fraction",
+    y = "ctDNA fraction (IMAF)",
     title = NULL
   ) +
   stat_summary(
@@ -1510,6 +1623,8 @@ p1 <- ggplot(violin_plot, aes(x = Stage_group, y = ctDNAfraction, fill = Stage_g
   ) +
   theme_minimal()+
     theme(
+    axis.title = element_text(hjust = 0.5,size=13,family = "Helvetica"), 
+    axis.text.x = element_text(hjust = 0.5,size=11,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.line = element_line(color = "black"), # add x axis line
@@ -1519,7 +1634,8 @@ p1 <- ggplot(violin_plot, aes(x = Stage_group, y = ctDNAfraction, fill = Stage_g
 p1
 ```
 
-### (B) Boxplot of ctDNA fraction and cancer subtype shows significantly lower fractions of ctDNA prior to treatment in patients with adenocarcinoma. 
+### (B) Boxplot of ctDNA fraction and cancer subtype shows significantly lower fractions of ctDNA prior to treatment in patients with adenocarcinoma.
+
 ```{r}
 # boxplot but subtype. ctDNA fraction = max AF from InVision and INVAR
 box_plot <- demografics %>%
@@ -1547,8 +1663,8 @@ p2 <- ggplot(box_plot, aes(x = Histological_subtype, y = ctDNAfraction)) +
   geom_boxplot(fill="#c7e9c0",alpha=0.7) +  
   geom_jitter(width = 0.2, color = "black") +
   labs(
-    x = "Stage",
-    y = "ctDNA fraction",
+    x = "Subtype",
+    y = "ctDNA fraction (IMAF)",
     title = NULL
   ) +
     scale_y_log10(
@@ -1556,8 +1672,11 @@ p2 <- ggplot(box_plot, aes(x = Histological_subtype, y = ctDNAfraction)) +
     breaks = c(8e-7,1e-5, 1e-4, 1e-3, 1e-2, 1e-1),
     labels = c("ND","1e-05", "1e-04", "1e-03", "1e-02", "1e-01")
   ) +
+  scale_x_discrete(labels=c("Adenocarcinoma","Squamous \ncell carcinoma", "Other"))+
   theme_minimal()+
     theme(
+    axis.title = element_text(hjust = 0.5,size=13,family = "Helvetica"), 
+    axis.text.x = element_text(hjust = 0.5,size=11,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.line = element_line(color = "black"), # add x axis line
@@ -1576,6 +1695,7 @@ p2
 ```
 
 ### (C) The fraction of plasma samples with ctDNA detected out of all 100 patients in the study, when different thresholds for detection are imposed ranging from ctDNA fraction of 1x10-6 (which includes all samples detected in this study) to fractional concentration of 1x10-2. Detection rates decreased with increasing thresholds; this decrease was most notable up to ctDNA fraction of 1x10-3 for patients with early-stage disease.
+
 ```{r}
 # bar plot but selected threshold. ctDNA fraction = max AF from InVision and INVAR
 bar_plot <- demografics %>%
@@ -1607,7 +1727,7 @@ bar_sum <- bar_plot%>%group_by(Stage_group)%>%
             "1e-04"= sum(ctDNAfraction>1e-4 & Detection_either== TRUE)/total,
             "1e-03"= sum(ctDNAfraction>1e-3 & Detection_either== TRUE)/total,
             "1e-02"= sum(ctDNAfraction>1e-2 & Detection_either== TRUE)/total) %>%
-  select(-total,-`1e-06`)
+  select(-total,-`1e-06`) # because there is only one 1e06 sample and it is not detected. so 1e-5 and 1e-6 have the same detection rate.
 
 # Convert to long format
 bar_sum_long <- bar_sum %>%
@@ -1629,6 +1749,8 @@ p3 <- ggplot(bar_sum_long, aes(x = Threshold, y = Detected_Fraction, fill = Stag
   scale_fill_manual(values = c("I" = "#EB3F1DD6", "II" = "#2DA32DE4", "III" = "#2A7DBDE2")) +  # Custom colors
   theme_minimal() +  # Use a minimal theme
   theme(
+    axis.title = element_text(hjust = 0.5,size=13,family = "Helvetica"), 
+    axis.text.x = element_text(hjust = 0.5,size=11,family = "Helvetica"), 
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.line = element_line(color = "black"), # add x axis line
@@ -1642,14 +1764,23 @@ p3
 ```{r}
 subtitle_lab<-c("A","B","C","D","E","F")
 p_list <- list(p1,p2,p3)
-for(i in c(1:3))
+for(i in c(1:3)){
 p_list[[i]] <-  p_list[[i]] +
   labs(title = subtitle_lab[i]) +  # Add label "A"
-  theme(plot.title = element_text(size = 12, face = "bold", hjust = -0.1, vjust = 0))  # Position 
+  theme(plot.title = element_text(size = 12, face = "bold", hjust = -0.1, vjust = 0),  # Position 
+  plot.margin = unit(c(0,0,20,20), "pt"))  # Position
+}
 
-combined_plot <- (p_list[[1]] + p_list[[2]] )/  # First row: plot1 and plot2 side by side
-  ( plot_spacer() + p_list[[3]] + plot_spacer()) +  # Second row: plot3 centered
-  plot_layout(nrow = 2,ncol=1, heights = c(1, 1))  # Define layout with 2 rows
+design <- c(
+  #area(t = 1, l = 1, b = 1, r = 1),  # Plot B (Row 1, Column 2)
+  area(t = 1, l = 1, b = 1, r = 2),  # Plot B (Row 1, Column 2)
+  area(t = 1, l = 3, b = 1, r = 4),  # Plot B (Row 1, Column 2)
+  area(t = 2, l = 1, b = 2, r = 1),
+  area(t = 2, l = 2, b = 2, r = 3),
+  area(t = 2, l = 4, b = 2, r = 4)
+)
+combined_plot<-p_list[[1]]+ p_list[[2]]  +plot_spacer()+ p_list[[3]] + plot_spacer() +  plot_layout(design = design,heights =c(4,4,4,4,4),widths = c(2,2,2,2,2))
+
 combined_plot
 
 ggsave(
@@ -1663,17 +1794,17 @@ ggsave(
 
 ```
 
-Fig. S3: 
-### (A) Correlation between ctDNA and tumour volume in the present study and recently published reports. While all studies show a significant correlation between ctDNA and tumour volume, the present study also detected and quantified ctDNA fractions in patients with tumour volumes below 1 cm3. 
+Fig. S3: \### (A) Correlation between ctDNA and tumour volume in the present study and recently published reports. While all studies show a significant correlation between ctDNA and tumour volume, the present study also detected and quantified ctDNA fractions in patients with tumour volumes below 1 cm3.
+
 ```{r}
 # tumor volume of others study. find Katerin's code
 
 ```
 
-
-### B) Comparing ctDNA fractions in patients with squamous cancers (blue triangle) and adenocarcinomas (red dots) shows that for the same tumour volume, ctDNA fractions are higher in squamous cancers vs. adenocarcinomas. 
+### B) Comparing ctDNA fractions in patients with squamous cancers (blue triangle) and adenocarcinomas (red dots) shows that for the same tumour volume, ctDNA fractions are higher in squamous cancers vs. adenocarcinomas.
 
 #### ctDNA fraction use max from Invision and INVAR2. Correlation test is in log scale.
+
 ```{r}
 volume_plot <- demografics %>%
   filter(!is.na(T_volume_mm3),Detection_either==TRUE,Histological_subtype %in% c("Adenocarcinoma","Squamous cell carcinoma")) %>%
@@ -1716,8 +1847,8 @@ p<-ggplot(volume_plot, aes(x = T_volume_cm3, y = ctDNAfraction, color = Patholog
     show.legend = FALSE
   ) +
   labs(
-    x = "Tumor Volume cm³",
-    y = "ctDNA Fraction",
+    x = "Tumor Volume (cm³)",
+    y = "ctDNA Fraction (IMAF)",
     title = "B", # In log scale for correlation test
   ) +
   scale_x_log10(
@@ -1753,7 +1884,8 @@ ggsave(
 p
 ```
 
-## Fig. S4: Kaplan-Meier plots showing overall survival (OS) and cancer-free survival considering all cancer or death events (CFS). 
+## Fig. S4: Kaplan-Meier plots showing overall survival (OS) and cancer-free survival considering all cancer or death events (CFS).
+
 ```{r}
 survival_plot <- RaDaR_data %>% 
   mutate(Patient=as.character(Patient)) %>% 
@@ -1768,15 +1900,29 @@ survival_plot <- RaDaR_data %>%
 y_labels <-c("Cancer-Free Survival (CFS)","Overall Survival (OS)")
 p<-list()
 subtitle_lab<-c("A","B","C","D","E","F")
+# median dates and hazard ratios
+median_hr<-matrix(NA, nrow = 6, ncol = 4)
+colnames(median_hr)<- c("med1","med2","HR","P")
+rownames(median_hr)<-subtitle_lab
 # subplot A
     surv_object <- Surv(time = survival_plot$CFS_date, event = survival_plot$CFS_event)
     fit <- survfit(surv_object ~ Treatment_category, data = survival_plot)
     p[[1]] <- make_survplot(survival_plot,levels(survival_plot$Treatment_category),fit,y_labels[1],subtitle_lab[1])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ Treatment_category, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[1,]<-c(median_survs,HR)
+    
 # subplot B
     surv_object <- Surv(time = survival_plot$CFS_date, event = survival_plot$CFS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot)
     p[[2]] <- make_survplot(survival_plot,levels(survival_plot$ctDNA),fit,y_labels[1],subtitle_lab[2])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[2,]<-c(median_survs,HR)
     
 # subplot C
     survival_plot_surgic <- survival_plot%>%filter(Treatment_category=="Surgical (with or without adjuvant treatment)")
@@ -1784,23 +1930,43 @@ subtitle_lab<-c("A","B","C","D","E","F")
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
     p[[3]] <- make_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[1],subtitle_lab[3])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[3,]<-c(median_survs,HR)
+    
 # subplot D
     survival_plot_adeno <- survival_plot%>%filter(Histological_subtype=="Adenocarcinoma")
     surv_object <- Surv(time = survival_plot_adeno$CFS_date, event = survival_plot_adeno$CFS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
     p[[4]]<-make_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[1],subtitle_lab[4])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[4,]<-c(median_survs,HR)
+    
 # subplot E
     surv_object <- Surv(time = survival_plot_surgic$OS_date, event = survival_plot_surgic$OS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
     p[[5]] <- make_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[2],subtitle_lab[5])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[5,]<-c(median_survs,HR)
+    
 # subplot F
     surv_object <- Surv(time = survival_plot_adeno$OS_date, event = survival_plot_adeno$OS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
     p[[6]]<-make_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[2],subtitle_lab[6])
 
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[6,]<-c(median_survs,HR)
+    
 # Combine subplots
 combined_plot <- p[[1]]+p[[2]]+p[[3]]+p[[4]]+p[[5]]+p[[6]]+
   plot_layout(nrow=3,ncol=2, heights = c(1, 1, 1),widths = c(1,1))
@@ -1815,11 +1981,12 @@ ggsave(
   dpi = 300,                       # Resolution (dots per inch)
   units = "in"                     # Units of width and height
 )
+print(median_hr)
 
 ```
 
+IMAF\>0 instead of detection just to see
 
-IMAF>0 instead of detection just to see
 ```{r}
 # Survival info from NSCLC_RaDaR_paper
 survival_plot_all_IMAF <- RaDaR_data %>% 
@@ -1846,15 +2013,29 @@ survival_plot_all_IMAF <- RaDaR_data %>%
 y_labels <-c("Cancer-Free Survival (CFS)","Overall Survival (OS)")
 p<-list()
 subtitle_lab<-c("A","B","C","D","E","F")
+# median dates and hazard ratios
+median_hr<-matrix(NA, nrow = 6, ncol = 4)
+colnames(median_hr)<- c("med1","med2","HR","P")
+rownames(median_hr)<-subtitle_lab
 # subplot A
     surv_object <- Surv(time = survival_plot_all_IMAF$CFS_date, event = survival_plot_all_IMAF$CFS_event)
     fit <- survfit(surv_object ~ Treatment_category, data = survival_plot_all_IMAF)
     p[[1]] <- make_survplot(survival_plot_all_IMAF,levels(survival_plot_all_IMAF$Treatment_category),fit,y_labels[1],subtitle_lab[1])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ Treatment_category, data = survival_plot_all_IMAF)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[1,]<-c(median_survs,HR)
+    
 # subplot B
     surv_object <- Surv(time = survival_plot_all_IMAF$CFS_date, event = survival_plot_all_IMAF$CFS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_all_IMAF)
     p[[2]] <- make_survplot(survival_plot_all_IMAF,levels(survival_plot_all_IMAF$ctDNA),fit,y_labels[1],subtitle_lab[2])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_all_IMAF)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[2,]<-c(median_survs,HR)
     
 # subplot C
     survival_plot_surgic <- survival_plot_all_IMAF%>%filter(Treatment_category=="Surgical (with or without adjuvant treatment)")
@@ -1862,22 +2043,41 @@ subtitle_lab<-c("A","B","C","D","E","F")
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
     p[[3]] <- make_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[1],subtitle_lab[3])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[3,]<-c(median_survs,HR)
+    
 # subplot D
     survival_plot_adeno <- survival_plot_all_IMAF%>%filter(Histological_subtype=="Adenocarcinoma")
     surv_object <- Surv(time = survival_plot_adeno$CFS_date, event = survival_plot_adeno$CFS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
     p[[4]]<-make_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[1],subtitle_lab[4])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[4,]<-c(median_survs,HR)
+    
 # subplot E
     surv_object <- Surv(time = survival_plot_surgic$OS_date, event = survival_plot_surgic$OS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
     p[[5]] <- make_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[2],subtitle_lab[5])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[5,]<-c(median_survs,HR)
+    
 # subplot F
     surv_object <- Surv(time = survival_plot_adeno$OS_date, event = survival_plot_adeno$OS_event)
     fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
     p[[6]]<-make_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[2],subtitle_lab[6])
 
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[6,]<-c(median_survs,HR)
 
 # Combine subplots
 combined_plot <- p[[1]]+p[[2]]+p[[3]]+p[[4]]+p[[5]]+p[[6]]+
@@ -1893,5 +2093,6 @@ ggsave(
   dpi = 300,                       # Resolution (dots per inch)
   units = "in"                     # Units of width and height
 )
-```
 
+print(median_hr)
+```
