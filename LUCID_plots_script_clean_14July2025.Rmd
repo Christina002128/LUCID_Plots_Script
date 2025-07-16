@@ -1186,8 +1186,8 @@ survival_plot <- RaDaR_data %>%
 
 # plots
 subtitle_lab<-c("A","B","C","D")
-subtitle_lab<-c("A \n    All patients",
-                "B \n    All patients", 
+subtitle_lab<-c("A \n     All patients",
+                "B \n     All patients", 
                 "C \n    Patients who underwent surgery",
                 "D \n    Patients with adenocarcinoma")
 # subplot ABCD
@@ -1582,9 +1582,11 @@ survival_plot <- RaDaR_data %>%
 
 y_labels <-c("Cancer-Free Survival (CFS)","Overall Survival (OS)")
 p<-list()
-subtitle_lab<-c("A \n      All patients",
-                "B \n     Patients who underwent surgery", "C \n     Patients who underwent surgery",
-                "D \n     Patients with adenocarcinoma", "E \n     Patients with adenocarcinoma")
+subtitle_lab<-c("A \n     All patients",
+                "B \n    Patients who underwent surgery", 
+                "C \n    Patients who underwent surgery",
+                "D \n    Patients with adenocarcinoma", 
+                "E \n    Patients with adenocarcinoma")
 # median dates and hazard ratios
 median_hr<-matrix(NA, nrow = 5, ncol = 4)
 colnames(median_hr)<- c("med1","med2","HR","P")
@@ -1680,10 +1682,10 @@ survival_plot <- RaDaR_data %>%
 
 y_labels <-c("Free From Relapse (FFR)","Overall Survival (OS)","Cancer-Free Survival (CFS)")
 p<-list()
-subtitle_lab<-c("A","B","C")
-subtitle_lab<-c("A \n      All patients",
-                "B \n      All patients", 
-                "C \n      All patients")
+
+subtitle_lab<-c("A \n     All patients",
+                "B \n     All patients", 
+                "C \n     All patients")
 # median dates and hazard ratios
 median_hr<-matrix(NA, nrow = 3, ncol = 4)
 colnames(median_hr)<- c("med1","med2","HR","P")
@@ -1760,8 +1762,8 @@ survival_plot_all_IMAF <- RaDaR_data %>%
 
 y_labels <-c("Free From Relapse (FFR)","Overall Survival (OS)")
 p<-list()
-subtitle_lab<-c("A \n    All patients",
-                "B \n    All patients", 
+subtitle_lab<-c("A \n     All patients",
+                "B \n     All patients", 
                 "C \n    Patients who underwent surgery",
                 "D \n    Patients who underwent surgery")
 
@@ -1856,7 +1858,8 @@ survival_plot_all_IMAF <- RaDaR_data %>%
 
 y_labels <-c("Free From Relapse (FFR)","Overall Survival (OS)")
 p<-list()
-subtitle_lab<-c("A","B")
+subtitle_lab<-c("A \n    Patients with adenocarcinoma",
+                "B \n    Patients with adenocarcinoma")
 # median dates and hazard ratios
 median_hr<-matrix(NA, nrow = 2, ncol = 4)
 colnames(median_hr)<- c("med1","med2","HR","P")
