@@ -41,20 +41,21 @@ output_plot_dir<-"plots_LUCID/"
 ## Load data
 
 ```{r load data}
-# supplementary from HSCLC RaDaR study
+# supplementary table
 excel_file="../supplement_LUCID_baseline_INVAR2_ChristinaZ_02Apr.xlsx"
 demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA")
+demografics$Histological_subtype[demografics$Histological_subtype == "missing"] <- "Not_reported"
+head(demografics)
 
+# mutation list table
 mutLists<-read_excel(excel_file,sheet = "Table 7", skip = 2)
 mutLists$Patient=as.character(mutLists$Patient)
 mutLists<-as.data.frame(mutLists)
 
 assay_muts<-read_excel(excel_file,sheet = "Table 4", skip = 2,na = "NA")
 assay_muts$Patient=as.character(assay_muts$Patient)
-# View the dataframe
-head(demografics)
 
-invar2_output<-read_excel(excel_file,sheet = "INVAR2_Output", skip = 2,na = "NA",)
+invar2_output<-read_excel(excel_file,sheet = "INVAR2_Output", skip = 2,na = "NA")
 
 # Survival info from NSCLC_RaDaR_paper
 RaDaR_data<-read_excel("../NSCLC_RaDaR_paper/1-s2.0-S0923753422001235-mmc2.xlsx",sheet = "Table S1", skip = 3)
@@ -71,7 +72,7 @@ RaDaR_data<-read_excel("../NSCLC_RaDaR_paper/1-s2.0-S0923753422001235-mmc2.xlsx"
 ### (B) Distribution of disease stage at diagnosis for 100 patients in the LUCID cohort. 60% of the patients were diagnosed with stage I disease at presentation. 
 
 ```{r}
-demografics$Histological_subtype[demografics$Histological_subtype == "missing"] <- "Not_reported"
+
 # Compute total patients per Stage
 stage_totals <- demografics %>%
   group_by(Stage_diagnosis) %>%
@@ -527,7 +528,7 @@ design <- c(
 
 )
 combined_plot<-p_list[[1]]+ p_list[[2]] + p_list[[3]] + p_list[[4]] + p_list[[5]] + plot_layout(design = design,heights =c(5,1.5,1.5,1.5,6),widths = c(2,2,2,2,2))
-
+combined_plot
 
 ggsave(
   filename = paste0("plots_LUCID/Fig2","ABC","_plot.png"), 
@@ -539,6 +540,44 @@ ggsave(
 )
 
 ```
+
+
+
+
+
+# Calculate the ppm for INVAR detection at >95% specificity (For all the negatives, change ctDNA fraction into 0) or at 88% specificity (ctDNA fraction > 0 as positives)
+```{r}
+# select columns for plotting
+ppm_estimate<-invar2_output%>%
+  mutate(Patient = PATIENT, 
+          IMAF_ppm = N_READS_MUTATED_PTSPEC_ALL_FILTERS/N_PTSPEC_INFORMATIVE_READS * 10^6,
+          Detected = ifelse(DETECTED.WITH_SIZE.OUTLIER_PASS, "Yes", "No")) %>%
+  left_join(demografics%>%select(Patient,Stage_diagnosis),by="Patient") %>% 
+  mutate(Stage_group = case_when(
+           grepl("^I[A-B]?$", Stage_diagnosis) ~ "I",
+           grepl("^II[A-B]?$", Stage_diagnosis) ~ "II",
+           grepl("^III[A-B]?$", Stage_diagnosis) ~ "III",
+           TRUE ~ NA_character_  ), # Handle unexpected values
+         Stage_group = factor(Stage_group, levels = c("I", "II", "III"))) %>% 
+  mutate(IMAF_ppm = ifelse(IMAF_ppm == 0, 1 ,IMAF_ppm)) %>%
+  # For 95% specificity, if not detected, ctDNA fraction = 0
+  mutate(IMAF_ppm_95spec=ifelse(Detected=="Yes", IMAF_ppm, 0))
+
+ppms <-matrix(NA, nrow = 3, ncol = 3)
+colnames(ppms)<- c("Stage","Median_ppm_95%","Median_ppm_88%")
+stage_group=c("I","II","III")
+for(i in 1:3){
+  ppm_95 <- median(ppm_estimate[ppm_estimate$Stage_group==stage_group[i],]$IMAF_ppm_95spec)
+  ppm_88 <- median(ppm_estimate[ppm_estimate$Stage_group==stage_group[i],]$IMAF_ppm)
+  ppms[i,]<-c(stage_group[i],round(ppm_95,4),round(ppm_88,4))
+}
+
+as.data.frame(ppms)
+
+```
+
+
+
 # Fig. 3. InVisionFirst®-Lung assay analysis in 27 patients with NSCLC. 
 ### (A) A total of 27 mutations were identified using a panel targeted sequencing approach. Most alterations were identified in TP53 (37%), followed by KRAS (22%). Where matched tissue data was available, we confirmed 70% (14/20) of these mutations. Of the remaining 6 mutations, one was confirmed to be a germline variant, two splice variants were not covered in our analysis, and three were not detected in tumour whole exome sequencing. 
 
@@ -718,7 +757,7 @@ print(unique(as.vector(matrix_data)))
 # Define colors for each category
 color_mapping <- c(
   "IA" = "#edf8e9", "IB" = "#c7e9c0","IIA" = "#a1d99b" , "IIB" = "#74c476", "IIIA" = "#31a354", "IIIB" = "#006d2c", 
-  "<59 years" = "#FCBBA1",  "60-69 years" = "#FC9272" , "70-74 years" = "#FB6A4A", "75 plus years" = "#A50F15",
+  "<59 years" = "#FCBBA1",  "60-69 years" = "#FA8561" , "70-74 years" = "#D94723", "75 plus years" = "#B51A1F",
   "Squamous cell carcinoma" = "#CCFFFF", "Adenocarcinoma" ="#fc8d62" , "Other" = "#CC9933", "Missing" = "white",
   "Male" = "gray62", "Female" = "black",
   "Current Smoker" = "#DB7828", "Ex-smoker" = "#ffffbf", "Never Smoked" = "#91bfdb",
@@ -1408,7 +1447,8 @@ bar_sum <- bar_plot%>%group_by(Stage_group)%>%
             "1e-05"= sum(ctDNAfraction>1e-5)/total, 
             "1e-04"= sum(ctDNAfraction>1e-4)/total,
             "1e-03"= sum(ctDNAfraction>1e-3)/total,
-            "1e-02"= sum(ctDNAfraction>1e-2)/total) %>%
+            "1e-02"= sum(ctDNAfraction>1e-2)/total,
+            "test"= sum(ctDNAfraction>2.2e-5)/total,) %>%
    select(-total) 
 
 # Convert to long format
@@ -1901,4 +1941,595 @@ ggsave(
 
 print(median_hr)
 ```
+
+## Aditional: complexheatmap plus the FFR progression info in the annotation
+```{r}
+# select columns for plotting
+demoplots<-demografics%>% 
+  mutate(ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF))) %>%
+  mutate(ctDNAfraction=ifelse(is.na(ctDNAfraction),0,ctDNAfraction),
+         ctDNAfraction=as.numeric(ctDNAfraction),
+         Treatment_category = ifelse(Treatment_category=="Non-surgical (radiotherapy +/- chemotherapy)", "Non-surgical",Treatment_category),
+         Treatment_category = ifelse(Treatment_category=="Surgical (with or without adjuvant treatment)", "Surgical",Treatment_category),
+         Smoking_history = ifelse(is.na(Smoking_history),"Never Smoked",Smoking_history),
+         Histological_subtype=as.character(Histological_subtype),
+         Histological_subtype = ifelse(Histological_subtype=="Not_reported","Not available",Histological_subtype),
+         detection_color = case_when(
+           Detection_either==TRUE ~ "#2D84CCF7",
+           Detection_either==FALSE & ctDNAfraction > 0  ~ "#A1CBF0F7",
+           Detection_either==FALSE & ctDNAfraction == 0 ~ "#C9CCCF")
+         )%>%
+  arrange(Stage_diagnosis,ctDNAfraction)%>%
+  select(Patient,ctDNAfraction,detection_color,Stage_diagnosis,Histological_subtype,Treatment_category,Smoking_history,Age_category,Sex,INVAR2_detection,InVisionFirst..Lung_detection)
+
+# Add FFR date
+demoplots <- demoplots %>% 
+  left_join(
+    RaDaR_data %>% mutate(Patient=as.character(Patient), 
+                            FFR_event = ifelse(`FFR event (freedom from recurrence)`=="0","No progression","Progression"))%>%
+                            select(Patient, FFR_event),
+    by="Patient")%>%
+  select(Patient,ctDNAfraction,detection_color,Stage_diagnosis,INVAR2_detection,InVisionFirst..Lung_detection,
+         FFR_event,Histological_subtype,Treatment_category,Smoking_history,Age_category,Sex)
+
+
+# transform to matrix
+matrix_data=t(as.matrix(demoplots%>%select(-Patient,-ctDNAfraction,-detection_color)))
+print(unique(as.vector(matrix_data)))
+# Define colors for each category
+color_mapping <- c(
+  # clinical outcome
+  "IA" = "#edf8e9", "IB" = "#c7e9c0","IIA" = "#a1d99b" , "IIB" = "#74c476", "IIIA" = "#31a354", "IIIB" = "#006d2c", 
+  "Yes" = "#7626BD", "No" =  "#CAA2E8", "Not analysed" = "#EDE2F5",
+  "Progression" = "#999079F1","No progression"= "#F7E9C1DF",
+  "Squamous cell carcinoma" = "#CCFFFF", "Adenocarcinoma" = "#F79B76", "Other" = "#D3DB7BF1", "Not available" = "#C9CCCF",
+  "Surgical" = "#A86A0C","Non-surgical" = "#FADA71",
+  # clinical background
+  "Current Smoker" = "#093857", "Ex-smoker" = "#4B86AD", "Never Smoked" = "#BBD9ED",
+  "<59 years" = "#FCBBA0",  "60-69 years" = "#FA8561" , "70-74 years" = "#D94723", "75 plus years" = "#B51A1F",
+  "Male" = "#9E9995F1", "Female" = "#2E2D2CF1"
+  
+)
+
+# complex heatmap
+# Add a small epsilon to avoid log(0) and handle zeros
+epsilon <- 5e-6
+demoplots$log_ctDNA <- log10(demoplots$ctDNAfraction + epsilon)
+baseline_value <- min(demoplots$log_ctDNA, na.rm = TRUE) - 0.1
+ha1 <- HeatmapAnnotation(
+  bar = anno_barplot(
+    demoplots$log_ctDNA,
+    baseline = baseline_value,  # Critical: Set baseline to the minimum log value
+    gp = gpar(col = demoplots$detection_color, fill = demoplots$detection_color),
+    axis_param = list(
+      at = log10(c(5e-6, 1e-5, 1e-4,1e-3,1e-2, 1e-1)),
+      labels = c("ND", "1e-05", "1e-04","1e-03","1e-02", "1e-01"),
+      side = "left"
+    )
+  ),
+  annotation_name_side = "left",
+  annotation_label = "ctDNA fraction",
+  annotation_height = unit(7, "cm")
+)
+# add legend for barplot
+lgd_bar <- Legend(
+  labels = c("Detected at specificity > 95%", "Detected at specificity 91%", "No signal"),
+  legend_gp = gpar(fill = c("#2D84CCF7","#A1CBF0F7","#C9CCCF")),
+  labels_gp = gpar(fontsize = 10),
+  nrow = 3
+  )
+
+# now add legend for both plots
+lg_titles<-c("Stage at \ndiagnosis","Detection","Recurrence",
+          "Pathological subtype","Treatment","Smoking history","Age group","Sex")
+lg_list=list()
+lens<-c(6,3,2,4,2,3,4,2)
+for(i in 1:length(lens)){
+if(i==1){
+  lengend_colors<-color_mapping[c(0 : lens[i])]
+  }else{
+  lengend_colors<-color_mapping[(sum(lens[1:(i-1)])+1) : (sum(lens[1:(i-1)])+lens[i])]
+  }
+lg_list[[i]]<-Legend(at = names(lengend_colors), 
+                     title = lg_titles[i], title_gp = gpar(fontsize = 11, fontface = "plain"),
+                     legend_gp = gpar(col = lengend_colors,fill = lengend_colors))
+}
+
+# Group and pack legends
+# Pack group2 parts into 2 rows
+pd_group2_row1 <- packLegend(list = lg_list[2:3], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row2 <- packLegend(list = lg_list[4:5], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row3 <- packLegend(list = lg_list[c(6,8)], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row4 <- packLegend(list = lg_list[7], direction = "vertical", gap = unit(5, "mm"))
+# Combine all groups
+pd_final <- packLegend(list = list(lg_list[[1]],pd_group2_row1, pd_group2_row2,pd_group2_row3, pd_group2_row4), direction = "horizontal", gap = unit(6, "mm"),row_gap = unit(6, "mm"),max_width = unit(22, "cm"))
+
+# heatmap
+ht <- Heatmap(matrix_data,  row_names_side = "left",heatmap_width = unit(20, "cm"),
+              row_names_gp = gpar(fontsize = 9),row_labels = c("Stage", "INVAR","Lung assay","Recurrence",
+                                                               "Pathology","Treatment","Smoking status","Age","Sex"), 
+        top_annotation = ha1,
+        show_heatmap_legend = FALSE,
+        col=color_mapping,rect_gp = grid::gpar(col = "black", lwd = 0.2),
+        border="black")
+
+# save image
+png("plots_LUCID/Addition_Fig4A_ctdna_heatmap.png", width = 8.5, height = 6.5, units = "in", res = 400)
+draw(ht, heatmap_legend_side = "bottom", annotation_legend_side = "right", heatmap_legend_list = pd_final)
+decorate_annotation("bar", {
+  pushViewport(viewport(x = unit(0.18, "npc"), y = unit(0.85, "npc")))
+  grid.draw(lgd_bar)
+  popViewport()
+})
+dev.off()
+#ht_gap = unit(20, "mm"), row_km = 2, 
+```
+
+```{r}
+# select columns for plotting
+demoplots<-demografics%>% 
+  mutate(ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF))) %>%
+  mutate(ctDNAfraction=ifelse(is.na(ctDNAfraction),0,ctDNAfraction),
+         ctDNAfraction=as.numeric(ctDNAfraction),
+         Treatment_category = ifelse(Treatment_category=="Non-surgical (radiotherapy +/- chemotherapy)", "Non-surgical",Treatment_category),
+         Treatment_category = ifelse(Treatment_category=="Surgical (with or without adjuvant treatment)", "Surgical",Treatment_category),
+         Smoking_history = ifelse(is.na(Smoking_history),"Never Smoked",Smoking_history),
+         Histological_subtype=as.character(Histological_subtype),
+         Histological_subtype = ifelse(Histological_subtype=="Not_reported","Not available",Histological_subtype),
+         detection_color = case_when(
+           Detection_either==TRUE ~ "#2D84CCF7",
+           Detection_either==FALSE & ctDNAfraction > 0  ~ "#A1CBF0F7",
+           Detection_either==FALSE & ctDNAfraction == 0 ~ "#C9CCCF")
+         )%>%
+  arrange(Stage_diagnosis,ctDNAfraction)%>%
+  select(Patient,ctDNAfraction,detection_color,Stage_diagnosis,Histological_subtype,Treatment_category,Smoking_history,Age_category,Sex,INVAR2_detection,InVisionFirst..Lung_detection)
+
+# Add Outcome category instead of FFR event
+# 7 types, needs to discuss
+unique(RaDaR_data$`Outcome category`)
+demoplots <- demoplots %>% 
+  left_join(
+    RaDaR_data %>% mutate(Patient=as.character(Patient), 
+                            Clinical_outcome = case_when(
+                              `Outcome category`=="No progression" ~ "No progression",
+                              `Outcome category`=="Progression" ~ "Progression",
+                              startsWith(RaDaR_data$`Outcome category`,"Second primary") ~ "Second primary",
+                              TRUE ~"Other"))%>%
+                            select(Patient, Clinical_outcome),
+    by="Patient")%>%
+  select(Patient,ctDNAfraction,detection_color,Stage_diagnosis,INVAR2_detection,InVisionFirst..Lung_detection,
+         Clinical_outcome,Histological_subtype,Treatment_category,Smoking_history,Age_category,Sex)
+
+
+# transform to matrix
+matrix_data=t(as.matrix(demoplots%>%select(-Patient,-ctDNAfraction,-detection_color)))
+print(unique(as.vector(matrix_data)))
+# Define colors for each category
+color_mapping <- c(
+  # clinical outcome
+  "IA" = "#edf8e9", "IB" = "#c7e9c0","IIA" = "#a1d99b" , "IIB" = "#74c476", "IIIA" = "#31a354", "IIIB" = "#006d2c", 
+  "Yes" = "#7626BD", "No" =  "#CAA2E8", "Not analysed" = "#EDE2F5",
+  "Progression" = "#C21F1F","Second primary" = "#6382EB", "No progression"= "#E6C573","Other" = "#EBE7DD",
+  "Squamous cell carcinoma" = "#CCFFFF", "Adenocarcinoma" = "#F79B76", "Other" = "#D3DB7BF1", "Not available" = "#C9CCCF",
+  "Surgical" = "#A86A0C","Non-surgical" = "#FADA71",
+  # clinical background
+  "Current Smoker" = "#093857", "Ex-smoker" = "#4B86AD", "Never Smoked" = "#BBD9ED",
+  "<59 years" = "#FCBBA0",  "60-69 years" = "#FA8561" , "70-74 years" = "#D94723", "75 plus years" = "#B51A1F",
+  "Male" = "#9E9995F1", "Female" = "#2E2D2CF1"
+  
+)
+
+# complex heatmap
+# Add a small epsilon to avoid log(0) and handle zeros
+epsilon <- 5e-6
+demoplots$log_ctDNA <- log10(demoplots$ctDNAfraction + epsilon)
+baseline_value <- min(demoplots$log_ctDNA, na.rm = TRUE) - 0.1
+ha1 <- HeatmapAnnotation(
+  bar = anno_barplot(
+    demoplots$log_ctDNA,
+    baseline = baseline_value,  # Critical: Set baseline to the minimum log value
+    gp = gpar(col = demoplots$detection_color, fill = demoplots$detection_color),
+    axis_param = list(
+      at = log10(c(5e-6, 1e-5, 1e-4,1e-3,1e-2, 1e-1)),
+      labels = c("ND", "1e-05", "1e-04","1e-03","1e-02", "1e-01"),
+      side = "left"
+    )
+  ),
+  annotation_name_side = "left",
+  annotation_label = "ctDNA fraction",
+  annotation_height = unit(7, "cm")
+)
+# add legend for barplot
+lgd_bar <- Legend(
+  labels = c("Detected at specificity > 95%", "Detected at specificity 91%", "No signal"),
+  legend_gp = gpar(fill = c("#2D84CCF7","#A1CBF0F7","#C9CCCF")),
+  labels_gp = gpar(fontsize = 10),
+  nrow = 3
+  )
+
+# now add legend for both plots
+lg_titles<-c("Stage at \ndiagnosis","Detection","Recurrence",
+          "Pathological subtype","Treatment","Smoking history","Age group","Sex")
+lg_list=list()
+lens<-c(6,3,4,4,2,3,4,2)
+for(i in 1:length(lens)){
+if(i==1){
+  lengend_colors<-color_mapping[c(0 : lens[i])]
+  }else{
+  lengend_colors<-color_mapping[(sum(lens[1:(i-1)])+1) : (sum(lens[1:(i-1)])+lens[i])]
+  }
+lg_list[[i]]<-Legend(at = names(lengend_colors), 
+                     title = lg_titles[i], title_gp = gpar(fontsize = 11, fontface = "plain"),
+                     legend_gp = gpar(col = lengend_colors,fill = lengend_colors))
+}
+
+# Group and pack legends
+# Pack group2 parts into 2 rows
+pd_group2_row1 <- packLegend(list = lg_list[2:3], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row2 <- packLegend(list = lg_list[4:5], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row3 <- packLegend(list = lg_list[c(6,8)], direction = "vertical", gap = unit(5, "mm"))
+pd_group2_row4 <- packLegend(list = lg_list[7], direction = "vertical", gap = unit(5, "mm"))
+# Combine all groups
+pd_final <- packLegend(list = list(lg_list[[1]],pd_group2_row1, pd_group2_row2,pd_group2_row3, pd_group2_row4), direction = "horizontal", gap = unit(6, "mm"),row_gap = unit(6, "mm"),max_width = unit(22, "cm"))
+
+# heatmap
+ht <- Heatmap(matrix_data,  row_names_side = "left",heatmap_width = unit(20, "cm"),
+              row_names_gp = gpar(fontsize = 9),row_labels = c("Stage", "INVAR","Lung assay","Recurrence",
+                                                               "Pathology","Treatment","Smoking status","Age","Sex"), 
+        top_annotation = ha1,
+        show_heatmap_legend = FALSE,
+        col=color_mapping,rect_gp = grid::gpar(col = "black", lwd = 0.2),
+        border="black")
+
+# save image
+png("plots_LUCID/Add2_Fig4A_ctdna_heatmap.png", width = 8.5, height = 6.5, units = "in", res = 300)
+draw(ht, heatmap_legend_side = "bottom", annotation_legend_side = "right", heatmap_legend_list = pd_final)
+decorate_annotation("bar", {
+  pushViewport(viewport(x = unit(0.18, "npc"), y = unit(0.85, "npc")))
+  grid.draw(lgd_bar)
+  popViewport()
+})
+dev.off()
+```
+
+## Modifying script from some values
+```{r}
+# 1. the outlier sample, which is detected by invision but not invar
+out_sample<-demografics%>%filter(INVAR2_detection=="No",InVisionFirst..Lung_detection=="Yes")%>%select(Patient,Tumour_mutations_number)
+Tumour_mutations_number=demografics$Tumour_mutations_number[!is.na(demografics$Tumour_mutations_number)]
+mean_val <- mean(Tumour_mutations_number)
+sd_val <- sd(Tumour_mutations_number)
+IQR=quantile(Tumour_mutations_number)
+# Create histogram
+hist(Tumour_mutations_number,
+     breaks = 20,                 # Adjust bin size as needed
+     col = "lightgray",
+     border = "white",
+     main = "Histogram with Median or mean",
+     xlab = "Values")
+
+# The value for the outlier sample
+abline(v = out_sample$Tumour_mutations_number, col = "purple", lwd = 2)
+
+# Add red line for IQRs
+abline(v = IQR[3], col = "red", lwd = 2)
+abline(v = IQR[2], col = "red", lty = 2, lwd = 2)
+abline(v = IQR[4], col = "red", lty = 2, lwd = 2)
+
+# Add red line for means
+abline(v = mean_val, col = "lightblue", lwd = 2)
+abline(v = mean_val - sd_val, col = "lightblue", lty = 2, lwd = 2)
+abline(v = mean_val + sd_val, col = "lightblue", lty = 2, lwd = 2)
+
+# Add legend
+legend("topright",
+       legend = c("Outlier sample","IQR1, median, IQR3", "Mean ± SD"),
+       col = c("purple","red", "lightblue"),
+       lty = c(1,1, 1),
+       lwd = 2,
+       bty = "n")
+
+# Say the lowest tumour mutations among the ones analysed by Invision?
+
+```
+
+
+# Additional survival plots. IMAF above median as ctDNA positive, below as negative
+```{r}
+# function for making 3 categories survival plots
+make_3types_survplot<-function(surv_data,legend_labs,fit,ylabel,subtitle){
+  p<- survminer::ggsurvplot(
+  fit, 
+  data = surv_data,
+  pval = TRUE,             # Show p-value (Log-rank test)
+  pval.size = 8,
+  # pval.coord = c(0,0.55),
+  surv.median.line = "hv",
+  conf.int = FALSE,         # Add confidence interval
+  censor = TRUE,
+  censor.size = 8,
+  ncensor.plot = FALSE, 
+  risk.table = TRUE,        # Show risk table below plot
+  risk.table.col = "strata", # Color risk table by strata
+  risk.table.y.text = FALSE, # Hide y-axis text in risk table
+  risk.table.y.text.col = TRUE, # Color y-axis text by strata
+  risk.table.height = 0.25,  # Adjust height of the risk table
+  risk.table.title = "",
+  risk.table.fontsize = 6 ,
+  # Adjust these for 3 groups
+  linetype = c("solid", "dashed", "dotted"),
+  palette = c("#1E52B3","#F0B83E", "#AB0D37"),  # Add a third color
+  legend.labs = legend_labs,  # Should now have 3 labels
+  
+  # limits
+  break.time.by = 90,
+  break.y.by = 0.2,
+  xlab = "Days",
+  ylab = ylabel,
+  title = subtitle,
+  ylim=c(-0.4,1),
+  legend = c(0.7,0.3),
+  legend.title="",
+  ggtheme = theme_survminer()+theme(
+      legend.background = element_rect(color = "darkgrey", fill = NULL, size = 0.5),
+      legend.title.position = NULL,
+      legend.text = element_text(size = 18),
+      legend.title = element_blank(),
+      axis.title.y = element_text(size=20),
+      axis.text.y = element_text(size = 18),
+      plot.title = element_text(hjust = -0.04, size = 28, face = "bold")  # Move title further left
+    ),
+  tables.theme = theme_survminer()+    
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 14),
+      axis.title.x = element_text(size = 20)
+    )
+    )
+final_plot <- p$plot +
+  scale_y_continuous(
+    limits = c(-0.25, 1), 
+    breaks = c(-0.25, 0, 0.2, 0.4, 0.6, 0.8, 1),
+    labels = c("",0, 0.2, 0.4, 0.6, 0.8, 1)
+  )  +  
+  inset_element(p$table, left = -0.055, bottom = -0.11, right = 1, top = 0.2)
+  
+  return(final_plot)
+}
+```
+
+
+### 3 catergories for Fig5. all stages or only stage I
+```{r}
+# Survival info from NSCLC_RaDaR_paper
+survival_plot <- RaDaR_data %>% 
+  mutate(Patient=as.character(Patient)) %>% 
+  right_join(demografics%>%
+               select(Patient,Treatment_category,Histological_subtype,INVAR2_fraction_IMAF,InVisionFirst..Lung_mean_AF,Stage_diagnosis,Detection_either),by="Patient") %>%
+  # only stage I or all
+  #filter(Stage_diagnosis=="IA" | Stage_diagnosis == "IB") %>% 
+  # change to detection = IMAF>0
+  mutate(
+    INVAR2_fraction_IMAF = as.numeric(INVAR2_fraction_IMAF),
+    InVisionFirst..Lung_mean_AF = as.numeric(InVisionFirst..Lung_mean_AF)) %>%
+  mutate(
+    ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF))) %>% 
+  mutate(Treatment_category=factor(Treatment_category,levels=c("Surgical (with or without adjuvant treatment)", "Non-surgical (radiotherapy +/- chemotherapy)")),
+         # change to 3 categories
+         ctDNA=case_when(
+           Detection_either==T ~ "ctDNA positive at baseline (>95% specificity)",
+           ctDNAfraction>0 & Detection_either==F ~ "ctDNA positive at baseline (91% specificity)",
+           ctDNAfraction==0 ~ "ctDNA negative at baseline" )
+         )%>%
+  mutate(ctDNA=factor(ctDNA,levels = c("ctDNA negative at baseline","ctDNA positive at baseline (91% specificity)","ctDNA positive at baseline (>95% specificity)")))%>%
+  select(Patient, FFR_event = `FFR event (freedom from recurrence)`,FFR_date = `FFR date`,
+         OS_event = `OS event (overall survival)`,OS_date = `OS date`,
+         Histological_subtype, Treatment_category, ctDNA)
+
+
+# plots
+subtitle_lab<-c("A","B","C","D")
+subtitle_lab<-c("A \n     All patients",
+                "B \n     All patients", 
+                "C \n    Patients who underwent surgery",
+                "D \n    Patients with adenocarcinoma")
+# subplot ABCD
+y_labels <-c("Free From Relapse (FFR)","Overall Survival (OS)")
+# median dates and hazard ratios
+median_hr<-matrix(NA, nrow = 4, ncol = 7)
+colnames(median_hr)<- c("negative","91%_detect","95%_detect","91%_HR","91%_P","95%_HR","95%_P")
+rownames(median_hr)<-subtitle_lab
+p<-list()
+for(i in 1:4){
+  if(i %in% c(1,2)){
+    if(i==1){
+      surv_object <- Surv(time = survival_plot$FFR_date, event = survival_plot$FFR_event)
+      ylabel<-y_labels[1]
+    }
+    if(i==2){
+      surv_object <- Surv(time = survival_plot$OS_date, event = survival_plot$OS_event)
+      ylabel<-y_labels[2]
+    }
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot)
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[i,]<-c(median_survs,HR[1,],HR[2,])
+    p[[i]] <- make_3types_survplot(survival_plot,legend_labs=levels(survival_plot$ctDNA),fit,ylabel,subtitle_lab[i])
+  }
+  if(i==3){
+    survival_plot_C <- survival_plot%>%filter(Treatment_category=="Surgical (with or without adjuvant treatment)")
+    surv_object <- Surv(time = survival_plot_C$FFR_date, event = survival_plot_C$FFR_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_C)
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_C)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[i,]<-c(median_survs,HR[1,],HR[2,])
+    p[[i]]<-make_3types_survplot(survival_plot_C,legend_labs=levels(survival_plot_C$ctDNA),fit,y_labels[1],subtitle_lab[i])
+  }
+  if(i==4){    
+    survival_plot_D <- survival_plot%>%filter(Histological_subtype=="Adenocarcinoma")
+    surv_object <- Surv(time = survival_plot_D$FFR_date, event = survival_plot_D$FFR_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_D)
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_D)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[i,]<-c(median_survs,HR[1,],HR[2,])
+    p[[i]]<-make_3types_survplot(survival_plot_D,legend_labs=levels(survival_plot_D$ctDNA),fit,y_labels[1],subtitle_lab[i])
+  }
+}
+combined_plot <- p[[1]]+p[[2]]+p[[3]]+p[[4]]+
+  plot_layout(nrow=2,ncol=2, heights = c(1, 1), widths = c(1, 1))
+
+combined_plot
+
+ggsave(
+  filename = "plots_LUCID/Add_surv/Fig5_but_3_IMAF.png", # "plots_LUCID/Add_surv/Fig5_but_3_IMAF_stageI_only.png"
+  plot = combined_plot,           
+  width = 26,                    
+  height = 15,                    
+  dpi = 500,                       # Resolution (dots per inch)
+  units = "in"                     # Unit in inches
+)
+
+print(median_hr)
+```
+
+
+```{r}
+
+# Survival info from NSCLC_RaDaR_paper
+survival_plot <- RaDaR_data %>% 
+  mutate(Patient=as.character(Patient)) %>% 
+  right_join(demografics%>%
+               select(Patient,Treatment_category,Histological_subtype,INVAR2_fraction_IMAF,InVisionFirst..Lung_mean_AF,Stage_diagnosis,Detection_either),by="Patient") %>%
+  # only stage I or all
+  #filter(Stage_diagnosis=="IA" | Stage_diagnosis == "IB") %>% 
+  # change to detection = IMAF>0
+  mutate(
+    INVAR2_fraction_IMAF = as.numeric(INVAR2_fraction_IMAF),
+    InVisionFirst..Lung_mean_AF = as.numeric(InVisionFirst..Lung_mean_AF)) %>%
+  mutate(
+    ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF))) %>% 
+  mutate(Treatment_category=factor(Treatment_category,levels=c("Surgical (with or without adjuvant treatment)", "Non-surgical (radiotherapy +/- chemotherapy)")),
+         # change to 3 categories
+         ctDNA=case_when(
+           Detection_either==T ~ "ctDNA positive at baseline (>95% specificity)",
+           ctDNAfraction>0 & Detection_either==F ~ "ctDNA positive at baseline (91% specificity)",
+           ctDNAfraction==0 ~ "ctDNA negative at baseline" )
+         )%>%
+  mutate(ctDNA=factor(ctDNA,levels = c("ctDNA negative at baseline","ctDNA positive at baseline (91% specificity)","ctDNA positive at baseline (>95% specificity)")))%>%
+  select(Patient, CFS_event = `CFS event (cancer free survival)`,CFS_date = `CFS date`,
+         OS_event = `OS event (overall survival)`,OS_date = `OS date`,
+         Histological_subtype, Treatment_category, ctDNA)
+
+y_labels <-c("Cancer-Free Survival (CFS)","Overall Survival (OS)")
+p<-list()
+subtitle_lab<-c("A \n     All patients",
+                "B \n    Patients who underwent surgery", 
+                "C \n    Patients who underwent surgery",
+                "D \n    Patients with adenocarcinoma", 
+                "E \n    Patients with adenocarcinoma")
+
+# median dates and hazard ratios
+median_hr<-matrix(NA, nrow = 5, ncol = 7)
+colnames(median_hr)<- c("negative","91%_detect","95%_detect","91%_HR","91%_P","95%_HR","95%_P")
+rownames(median_hr)<-subtitle_lab
+
+# subplot A
+    surv_object <- Surv(time = survival_plot$CFS_date, event = survival_plot$CFS_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot)
+    p[[1]] <- make_3types_survplot(survival_plot,levels(survival_plot$ctDNA),fit,y_labels[1],subtitle_lab[1])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[1,]<-c(median_survs,HR[1,],HR[2,])
+    
+# subplot B
+    survival_plot_surgic <- survival_plot%>%filter(Treatment_category=="Surgical (with or without adjuvant treatment)")
+    surv_object <- Surv(time = survival_plot_surgic$CFS_date, event = survival_plot_surgic$CFS_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
+    p[[2]] <- make_3types_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[1],subtitle_lab[2])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[2,]<-c(median_survs,HR[1,],HR[2,])
+
+# subplot C
+    surv_object <- Surv(time = survival_plot_surgic$OS_date, event = survival_plot_surgic$OS_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_surgic)
+    p[[3]] <- make_3types_survplot(survival_plot_surgic,legend_labs=levels(survival_plot_surgic$ctDNA),fit,y_labels[2],subtitle_lab[3])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_surgic)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[3,]<-c(median_survs,HR[1,],HR[2,])
+    
+# subplot D
+    survival_plot_adeno <- survival_plot%>%filter(Histological_subtype=="Adenocarcinoma")
+    surv_object <- Surv(time = survival_plot_adeno$CFS_date, event = survival_plot_adeno$CFS_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
+    p[[4]]<-make_3types_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[1],subtitle_lab[4])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[4,]<-c(median_survs,HR[1,],HR[2,])
+    
+# subplot E
+    surv_object <- Surv(time = survival_plot_adeno$OS_date, event = survival_plot_adeno$OS_event)
+    fit <- survfit(surv_object ~ ctDNA, data = survival_plot_adeno)
+    p[[5]]<-make_3types_survplot(survival_plot_adeno,legend_labs=levels(survival_plot_adeno$ctDNA),fit,y_labels[2],subtitle_lab[5])
+
+    median_survs<- summary(fit)$table[,"median"] 
+    cox_fit <- coxph(surv_object ~ ctDNA, data = survival_plot_adeno)
+    HR<-round(summary(cox_fit)$coefficients[,c("exp(coef)","Pr(>|z|)")],3)
+    median_hr[5,]<-c(median_survs,HR[1,],HR[2,])
+    
+# Combine subplots
+combined_plot <- p[[1]]+p[[2]]+p[[3]]+p[[4]]+p[[5]]+
+  plot_layout(nrow=3,ncol=2, heights = c(1, 1, 1),widths = c(1,1))
+
+combined_plot
+
+ggsave(
+  filename = "plots_LUCID/Add_surv/FigS3_but_3_IMAF.png",# "plots_LUCID/Add_surv/FigS3_but_3_IMAF_stageI_only.png"
+  plot = combined_plot,           
+  width = 24,                    
+  height = 22,                    
+  dpi = 450,                       # Resolution (dots per inch)
+  units = "in"                     # Unit in inches
+)
+print(median_hr)
+
+```
+
+
+
 
