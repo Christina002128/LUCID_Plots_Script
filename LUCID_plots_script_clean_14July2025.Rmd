@@ -318,7 +318,7 @@ detection_data<-invar2_output%>%mutate(IR= N_PTSPEC_INFORMATIVE_READS, IMAF =
   select(PATIENT,cancer_genome,Detected)
   
 
-p1<-ggplot(detection_data, aes(x = PATIENT)) +
+p3<-ggplot(detection_data, aes(x = PATIENT)) +
   # Draw bars (upside-down if cancer_genome < 1)
   geom_segment(aes(x = PATIENT, xend = PATIENT, y = 0, yend = cancer_genome, color = Detected),
     linewidth = 2  ) +
@@ -345,7 +345,7 @@ p1<-ggplot(detection_data, aes(x = PATIENT)) +
     axis.ticks = element_line("black"),
     axis.line = element_line()
   )
-p1
+p3
 ```
 
 ### (B) ctDNA tumour fractions, in parts per million (ppm), detected in baseline plasma samples according to disease stage at diagnosis, for the 90 patients analysed with INVAR (n = 55, 18 and 17 patients with stage I, II and III disease, respectively). Median ctDNA levels per stage are indicated with vertical dotted lines. 
@@ -421,8 +421,8 @@ if(i==1){
 
 final_plot <- (p[[1]] / p[[2]] / p[[3]])  
 
-p2<-final_plot
-p2
+p1<-final_plot
+p1
 ```
 
 ### (C) Informative Reads (IR) are plotted against the Integrated Mutant Allele Fraction (IMAF) which estimates the ctDNA levels in each sample. Sensitivity of the INVAR pipeline increases with increasing IR and the threshold for ctDNA detection can be roughly estimated as 2/IR (indicated by dashed diagonal line). Samples with fewer than 20,000 IR (dark grey box) allow only for limited detection sensitivity. Samples in which ctDNA was detected by INVAR are shown in green. Undetected samples are shown in grey.
@@ -439,7 +439,7 @@ detection_data<-invar2_output%>%mutate(IR= N_PTSPEC_INFORMATIVE_READS, IMAF =
 detection_data <- detection_data %>%
   mutate(plot_IMAF = ifelse(IMAF!=0, IMAF, 1e-6))
 
-p3<-ggplot(detection_data, aes(x = IR, y = plot_IMAF)) +
+p2<-ggplot(detection_data, aes(x = IR, y = plot_IMAF)) +
   # Add shadowed region with geom_ribbon
   geom_ribbon(
     data = data.frame(
@@ -504,7 +504,7 @@ p3<-ggplot(detection_data, aes(x = IR, y = plot_IMAF)) +
 # Optionally, set the size of the output figure when saving
 # ggsave("my_plot.png", p, width = 8, height = 6)
 
-p3
+p2
 ```
 
 
@@ -520,11 +520,11 @@ p_list[[i]] <-  p_list[[i]] +
 
 
 design <- c(
-  area(t = 1, l = 1, b = 1, r = 2),   # Plot A (Row 1, spans all columns)
-  area(t = 2, l = 1, b = 2, r = 2),   # Plot B (Row 2, spans all columns)
-  area(t = 3, l = 1, b = 3, r = 2),   # Plot B (Row 3, spans all columns)
-  area(t = 4, l = 1, b = 4, r = 2),  # Plot B (Row 4, spans all columns)
-  area(t = 5, l = 1, b = 5, r = 2)  # Plot C (Row 5, spans all columns)
+  area(t = 1, l = 1, b = 1, r = 2),  # Plot C (Row 5, spans all columns)
+  area(t = 2, l = 1, b = 2, r = 2),   # Plot A (Row 1, spans all columns)
+  area(t = 3, l = 1, b = 3, r = 2),   # Plot B (Row 2, spans all columns)
+  area(t = 4, l = 1, b = 4, r = 2),   # Plot B (Row 3, spans all columns)
+  area(t = 5, l = 1, b = 5, r = 2),  # Plot B (Row 4, spans all columns)
 
 )
 combined_plot<-p_list[[1]]+ p_list[[2]] + p_list[[3]] + p_list[[4]] + p_list[[5]] + plot_layout(design = design,heights =c(5,1.5,1.5,1.5,6),widths = c(2,2,2,2,2))
