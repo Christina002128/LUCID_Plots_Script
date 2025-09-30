@@ -1,0 +1,270 @@
+---
+title: "LUCID_specificity_testing"
+author: "Christina"
+date: "2025-03-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+
+
+mutation_tracking.csv using adjustInvarScores function, using score_specificity as threshold (0.95)
+```{r}
+invar_specificity <- function(pass_scores){
+control_scores <- pass_scores %>% filter(!PATIENT_SPECIFIC) %>%
+  arrange(ADJUSTED_INVAR_SCORE)
+
+score_threshold <- as.numeric(control_scores[floor(nrow(control_scores)*0.95),"ADJUSTED_INVAR_SCORE"])
+control_specificity <-pass_scores %>%
+  filter(PATIENT_SPECIFIC,ADJUSTED_INVAR_SCORE>score_threshold)%>%
+  arrange(ADJUSTED_INVAR_SCORE)
+control_specificity <- control_specificity$ADJUSTED_INVAR_SCORE[1]
+# detection summary
+detected <- pass_scores %>%
+  mutate(DETECTION = case_when(
+    PATIENT_SPECIFIC & ADJUSTED_INVAR_SCORE>score_threshold ~ TRUE,
+    PATIENT_SPECIFIC & ADJUSTED_INVAR_SCORE<=score_threshold ~ FALSE,
+    !PATIENT_SPECIFIC & ADJUSTED_INVAR_SCORE>control_specificity ~ TRUE,
+    !PATIENT_SPECIFIC & ADJUSTED_INVAR_SCORE<=control_specificity ~ FALSE))%>%
+  group_by(PATIENT_SPECIFIC)%>%
+  summarise(Total = n(),
+            Detected = sum(DETECTION),
+            DETECTION_rate = Detected/Total)
+
+#print(detected)
+# plotting
+log_adjust_zero <- pass_scores %>% summarise(minimum = min(ADJUSTED_INVAR_SCORE[ADJUSTED_INVAR_SCORE!=0]))
+pass_scores <- pass_scores %>% 
+  mutate( log_adjust_score =ifelse(ADJUSTED_INVAR_SCORE==0, log_adjust_zero$minimum*0.1,ADJUSTED_INVAR_SCORE))
+# distribution of controls and cases
+p<-ggplot(pass_scores,aes(x=log_adjust_score,fill=PATIENT_SPECIFIC)) +
+  geom_histogram(bins = 30) +
+  scale_x_log10()+
+  scale_y_log10()+
+  labs(title = "Distribution of invar scores (non-patient specific vs patient specific)",x = "INVAR Score",y="Count") +
+  geom_vline(xintercept = score_threshold, linetype = "dashed", size = 0.5, color = "black") +
+  theme_minimal()
+print(p)
+return(list(detected,p))
+}
+p
+```
+
+# specificity using patient as control
+```{r}
+# specificity = TN/(TN+FP) = not detected controls / total controls
+# sensitivity = TP/(TP+FN) = detected cases / total cases
+files <- c("batch1/results/invar_scores.rds","batch2/results/invar_scores.rds","batch3/results/invar_scores.rds")
+detections=c()
+for(i in 1:3){
+  invarScoresTable<-readRDS(files[i])
+  if(sum(!invarScoresTable$CONTAMINATION_RISK.PASS)>0){
+    message("Batch ",i," contamination warning: ",sum(!invarScoresTable$CONTAMINATION_RISK.PASS))
+  }
+  # adjust invar score and IMAF so that if there's no mutant reads than it has 0 or 1/DP for score and IMAF
+adjust_invarScoresTable <-  invarScoresTable %>%
+  mutate(PATIENT_SPECIFIC = ifelse(PATIENT==PATIENT_MUTATION_BELONGS_TO,TRUE,FALSE))%>%
+    mutate(ADJUSTED_INVAR_SCORE = ifelse(MUTANT_READS_PRESENT, INVAR_SCORE, 0),
+           ADJUSTED_IMAF = ifelse(MUTANT_READS_PRESENT, IMAF, 0)) %>%
+    mutate(ADJUSTED_IMAF = ifelse(ADJUSTED_IMAF < 1 / DP, 1 / DP, ADJUSTED_IMAF))
+# invar scores for all pass and using size condition
+pass_scores <- adjust_invarScoresTable %>% filter(USING_SIZE,LOCUS_NOISE.PASS,BOTH_STRANDS.PASS,BOTH_STRANDS.PASS,OUTLIER.PASS)%>%
+      filter(PATIENT_SPECIFIC | CONTAMINATION_RISK.PASS)
+  data_list<-invar_specificity(pass_scores)
+  data_list[[1]]$batch <- i
+  detections<-rbind(detections,data_list[[1]])
+}
+
+final<-detections%>%filter(PATIENT_SPECIFIC==TRUE)%>%
+    mutate(detection=round(DETECTION_rate,4)*100)%>% 
+    select(batch,detection,Total)%>%
+    left_join(
+      detections%>%filter(PATIENT_SPECIFIC==FALSE)%>%
+      mutate(specificity=round(1-DETECTION_rate,4)*100)%>%
+        select(batch,specificity),
+      by="batch")
+final
+mean(final$specificity)
+
+weighted.mean(final$specificity,final$Total)
+```
+
+
+
+Results_summary.csv use scaleInvarScores function (cutpoint:MaxSpSe) as specificity threshold, so it is not fixed value
+getIFPatientData > (adjustedScores -> scaleInvarScores) > cutPointGLRT
+```{r}
+spec <- pass_scores %>%filter(PATIENT_SPECIFIC)
+non_spec <- pass_scores %>%filter(!PATIENT_SPECIFIC)
+# the minimum DP in the patient specific DPs, use this to filter out all the controls that does not pass this minDP threshold
+minimumSpecificDP <- ifelse(nrow(spec) == 0, 0, min(spec$DP))
+                            
+roc <- bind_rows(spec, non_spec) %>%
+    select(c('SAMPLE_ID', 'PATIENT_SPECIFIC', ADJUSTED_INVAR_SCORE, 'DP')) %>%
+    filter(DP >= minimumSpecificDP) # depth can't be lower then lowest patient specific depth
+
+# calculate cutoff points for diagnostic test
+cutPointInfo <- tryCatch( 
+      {OptimalCutpoints::optimal.cutpoints(data = as.data.frame(roc), X = 'ADJUSTED_INVAR_SCORE',
+                                            status = "PATIENT_SPECIFIC", tag.healthy = FALSE,
+                                            methods = "MaxSpSe", direction = "<")},
+      error = function(cond)
+      {
+        stop("OptimalCutpoints::optimal.cutpoints failed: ", geterrmessage())
+      })
+
+
+sizeCutOff <- cutPointInfo$MaxSpSe$Global$optimal.cutoff$cutoff
+maximumSpecificity <- max(cutPointInfo$MaxSpSe$Global$optimal.cutoff$Sp)
+# A new invar score threshold under the maxSpSe calculated cutoff point
+scoresForQuantile <- roc  %>% filter(!PATIENT_SPECIFIC) %>%select(ADJUSTED_INVAR_SCORE)
+quantileResult <- quantile(scoresForQuantile[[1]], probs = maximumSpecificity)
+quantileLabel <- round(as.double(str_replace(names(quantileResult), '%', '')), digits = 1)
+invarScoreThreshold <- unname(quantileResult)
+
+cutPointInfo.withSize <- list(SIZE_CUT_OFF = sizeCutOff,
+       MAXIMUM_SPECIFICITY = maximumSpecificity,
+       ROC = roc,
+       QUANTILE_SPECIFICITY = quantileLabel,
+       INVAR_SCORE_THRESHOLD = ifelse(invarScoreThreshold == 0, 1e-31, invarScoreThreshold))
+
+# detection result based on cutoff
+non_spec <- non_spec %>%
+    mutate(DETECTED.WITH_SIZE = ADJUSTED_INVAR_SCORE >= cutPointInfo.withSize$INVAR_SCORE_THRESHOLD)
+spec <- spec %>%
+    mutate(DETECTED.WITH_SIZE = ADJUSTED_INVAR_SCORE >= cutPointInfo.withSize$INVAR_SCORE_THRESHOLD)
+
+sum(spec$DETECTED.WITH_SIZE)
+# calculate the specificity under each samples detection (how many of the control invar scores higher than this sample invar score as detection rate)
+non_spec.N <- nrow(non_spec)
+spec <- spec %>%
+    rowwise() %>%
+    mutate(SPECIFICITY.WITH_SIZE =
+             sum(ADJUSTED_INVAR_SCORE > non_spec$ADJUSTED_INVAR_SCORE) /
+             non_spec.N) %>%
+    ungroup()
+# summarize
+scaledInvarResultsList <- list(PATIENT_SPECIFIC = spec,
+       NON_SPECIFIC = non_spec,
+       CUT_OFF.WITH_SIZE = cutPointInfo.withSize)
+  
+
+```
+
+
+### 11July2025, investigate if simply say IMAF>0 as detected, what would be the specificity. 
+```{r}
+files <- c("batch1/results/invar_scores.rds","batch2/results/invar_scores.rds","batch3/results/invar_scores.rds")
+detections=c()
+p=list()
+for(i in 1:3){
+  invarScoresTable<-readRDS(files[i])
+  if(sum(!invarScoresTable$CONTAMINATION_RISK.PASS)>0){
+    message("Batch ",i," contamination warning: ",sum(!invarScoresTable$CONTAMINATION_RISK.PASS))
+  }
+  # adjust invar score and IMAF so that if there's no mutant reads than it has 0 or 1/DP for score and IMAF
+  adjust_invarScoresTable <-  invarScoresTable %>%
+    mutate(PATIENT_SPECIFIC = ifelse(PATIENT==PATIENT_MUTATION_BELONGS_TO,TRUE,FALSE))%>%
+      mutate(ADJUSTED_INVAR_SCORE = ifelse(MUTANT_READS_PRESENT, INVAR_SCORE, 0),
+             ADJUSTED_IMAF = ifelse(MUTANT_READS_PRESENT, IMAF, 0)) %>%
+      mutate(ADJUSTED_IMAF = ifelse(ADJUSTED_IMAF < 1 / DP, 1 / DP, ADJUSTED_IMAF))
+  # invar scores for all pass and using size condition
+  pass_scores <- adjust_invarScoresTable %>% filter(USING_SIZE,LOCUS_NOISE.PASS,BOTH_STRANDS.PASS,BOTH_STRANDS.PASS,OUTLIER.PASS)%>%
+        filter(PATIENT_SPECIFIC | CONTAMINATION_RISK.PASS)
+  pass_scores <- pass_scores%>%
+    select(PATIENT, PATIENT_SPECIFIC, ADJUSTED_INVAR_SCORE)%>%
+    mutate(Detected=ifelse(ADJUSTED_INVAR_SCORE>0,TRUE,FALSE))
+  
+  detected_number = nrow(pass_scores%>%filter(PATIENT_SPECIFIC,Detected))
+  total_number = nrow(pass_scores%>%filter(PATIENT_SPECIFIC))
+  detection = round( detected_number / total_number , 3)
+  specificity = round( nrow(pass_scores%>%filter(!PATIENT_SPECIFIC,!Detected)) / nrow(pass_scores%>%filter(!PATIENT_SPECIFIC)) , 3)
+  batch = i
+  data = cbind(batch,detection,specificity,detected_number,total_number)
+  detections<-rbind(detections, data)
+  
+  # plotting
+  log_adjust_zero <- pass_scores %>% summarise(minimum = min(ADJUSTED_INVAR_SCORE[ADJUSTED_INVAR_SCORE!=0]))
+  pass_scores <- pass_scores %>% 
+    mutate( log_adjust_score =ifelse(ADJUSTED_INVAR_SCORE==0, log_adjust_zero$minimum*0.1,ADJUSTED_INVAR_SCORE))
+  # distribution of controls and cases
+  p[[i]]<-ggplot(pass_scores,aes(x=log_adjust_score,fill=PATIENT_SPECIFIC)) +
+    geom_histogram(bins = 30) +
+    scale_x_log10()+
+    scale_y_log10()+
+    labs(title = "Distribution of invar scores (non-patient specific vs patient specific)",x = "INVAR Score",y="Count") +
+    geom_vline(xintercept = log_adjust_zero$minimum, linetype = "dashed", size = 0.5, color = "black") +
+    theme_minimal()  
+}
+
+detections<-as.data.frame(detections)
+detections
+p
+
+weighted.mean(detections$specificity,detections$total_number)
+# specificity for 90 samples using IMAF>0 as detected, is 88.6%
+```
+
+## Calculate the weighted mean of specificity  (100 patients, Invision lung use 99.2% specificity)
+```{r}
+# Add Invision specificity as 99.2%
+
+# 1. If both method analysed, just use INVAR, which is the same as choosing the lower specificity. So just add the 10 samples only analysed by Invision
+weighted.mean(c(detections$specificity,0.992),c(detections$total_number,10))
+
+# 2. If both method analysed, use the specificity of the method with larger ctDNA fraction
+excel_file="../supplement_LUCID_baseline_INVAR2_ChristinaZ_02Apr.xlsx"
+demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA")
+invar2_output<-read_excel(excel_file,sheet = "INVAR2_Output", skip = 2,na = "NA")
+specs<-demografics%>%
+  left_join(invar2_output%>%select(Patient=PATIENT,batch),by = "Patient")%>%
+  filter(Detection_either==T)%>%
+  mutate(
+    INVAR2_fraction_IMAF = as.numeric(INVAR2_fraction_IMAF),
+    InVisionFirst..Lung_mean_AF = as.numeric(InVisionFirst..Lung_mean_AF)) %>%
+  mutate(
+    ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF))) %>% 
+    mutate(specificity = case_when(
+    batch == "batch1" ~ detections$specificity[1],
+    batch == "batch2" ~ detections$specificity[2],
+    batch == "batch3" ~ detections$specificity[3],
+    TRUE ~ 0.992
+  ))%>%
+  mutate(specificity = ifelse(
+    !is.na(InVisionFirst..Lung_mean_AF) & ctDNAfraction==InVisionFirst..Lung_mean_AF , 0.992, specificity))%>%
+  select(InVisionFirst..Lung_detection, INVAR2_detection,Detection_either, batch, ctDNAfraction, specificity)
+
+print(specs$specificity)
+
+length(specs$specificity)
+for(i in unique(specs$specificity)){
+  print(paste(i,": ",sum(specs$specificity==i)))
+}
+
+weighted.mean(specs$specificity)
+
+# The specificity for all IMAF>0 is 90.97%
+```
+```{r}
+  mutate(specificity = case_when(
+    ctDNAfraction==InVisionFirst..Lung_mean_AF & !is.na(InVisionFirst..Lung_mean_AF) ~ 0.992,
+    ctDNAfraction==INVAR2_fraction_IMAF & !is.na(INVAR2_fraction_IMAF) & batch == "batch1" ~ detections$specificity[1],
+    ctDNAfraction==INVAR2_fraction_IMAF & !is.na(INVAR2_fraction_IMAF) & batch == "batch2" ~ detections$specificity[2],
+    ctDNAfraction==INVAR2_fraction_IMAF & !is.na(INVAR2_fraction_IMAF) & batch == "batch3" ~ 
+      detections$specificity[3]
+  ))%>%
+    select(specificity)
+```
+
