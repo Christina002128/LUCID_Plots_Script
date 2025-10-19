@@ -1,0 +1,239 @@
+---
+title: "INVAR_Final_supplement"
+author: "Christina"
+date: "2025-07-22"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(patchwork)
+library(dplyr)
+library(readr)
+library(openxlsx)
+library(readxl)
+```
+
+```{r}
+# The final output
+# old supp
+All_patients_supplement <- read_excel("Supplement_LUCID_baseline_INVAR2_ChristinaZ_27Feb.xlsx",sheet = "patient_phenotype", skip = 2,na = "NA")
+All_patients_supplement <- All_patients_supplement %>% mutate(PATIENT=as.character(Patient))
+# use for 
+# batch1 s1_seq result, 13/19
+b1<-read.table("INVAR2_results/batch1/analysis/mutations_tracking.csv",header = TRUE,  sep = ",")%>% mutate(batch="batch1")
+# batch2 26/34
+b2<-read.table("INVAR2_results/batch2/analysis/mutations_tracking.csv",header = TRUE,  sep = ",")%>% mutate(batch="batch2")
+# batch3 16/37
+b3<-read.table("INVAR2_results/batch3/analysis/mutations_tracking.csv", header = TRUE,  sep = ",")%>% mutate(batch="batch3")
+INVAR2_out<-rbind(b1,b2,b3)%>%filter(CASE_OR_CONTROL=="case")%>%
+  mutate(PATIENT=as.character(PATIENT),
+         DETECTED.WITH_SIZE.OUTLIER_PASS=as.logical(DETECTED.WITH_SIZE.OUTLIER_PASS),
+         DETECTED.NO_SIZE.OUTLIER_PASS=as.logical(DETECTED.NO_SIZE.OUTLIER_PASS),
+         DETECTED.WITH_SIZE.OUTLIER_FAIL=as.logical(DETECTED.WITH_SIZE.OUTLIER_FAIL),
+         DETECTED.NO_SIZE.OUTLIER_FAIL=as.logical(DETECTED.NO_SIZE.OUTLIER_FAIL))
+```
+
+# weird that batch3 has a IIIB patient that is not detected in any INVAR2 result, but detected in INVAR1.
+```{r}
+# summary table
+data<-INVAR2_out%>%select(PATIENT,batch,DETECTED.WITH_SIZE.OUTLIER_PASS)%>%left_join(All_patients_supplement,by="PATIENT")
+data
+# stage summary
+stage<-data%>%group_by(Stage_diagnosis)%>%summarise("Number n/N"=paste0(sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE), "/", sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS))),"ctDNA detection rate"=sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE) / sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS)))%>%mutate(`ctDNA detection rate`=round(`ctDNA detection rate`,2))
+stage
+# subtybe
+subtype<-data%>%group_by(Histological_subtype)%>%
+  summarise("Number n/N"=paste0(sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE), "/", sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS))),
+            "ctDNA detection rate"=sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE) / sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS)))%>%
+  mutate(`ctDNA detection rate`=round(`ctDNA detection rate`,2))
+subtype
+# treatment
+treatment<-data%>%group_by(Treatment_category)%>%
+  summarise("Number n/N"=paste0(sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE), "/", sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS))),
+            "ctDNA detection rate"=sum(DETECTED.WITH_SIZE.OUTLIER_PASS == TRUE, na.rm = TRUE) / sum(!is.na(DETECTED.WITH_SIZE.OUTLIER_PASS)))%>%
+  mutate(`ctDNA detection rate`=round(`ctDNA detection rate`,2))
+treatment
+# overal detection rate
+overall_detection <-data %>% summarise("Number n/N"=paste(sum(DETECTED.WITH_SIZE.OUTLIER_PASS==TRUE),nrow(data),sep="/"),"ctDNA detection rate"=sum(DETECTED.WITH_SIZE.OUTLIER_PASS==TRUE)/nrow(data))
+overall_detection
+
+```
+
+```{r}
+# new phenotype table
+data<-INVAR2_out%>%
+  mutate(INVAR2_informative_reads=N_PTSPEC_INFORMATIVE_READS,
+         INVAR2_fraction_IMAF=N_READS_MUTATED_PTSPEC_ALL_FILTERS/N_PTSPEC_INFORMATIVE_READS,
+         INVAR2_detection=ifelse(DETECTED.WITH_SIZE.OUTLIER_PASS,"Yes","No"))%>%
+  select(PATIENT,INVAR2_informative_reads,INVAR2_fraction_IMAF,INVAR2_detection)
+supp_new<-All_patients_supplement%>%
+  select(PATIENT,Patient,Age_category,Sex,	Smoking_history,	Months_smoking,	Months_quit,	Stage_diagnosis,	
+                            Histological_subtype,	Treatment_category,	T_volume_mm3,	Tumour_mutations_number,	
+                            InVisionFirst..Lung_detection,	InVisionFirst..Lung_mean_AF)%>%
+  left_join(data,by="PATIENT")%>%
+  mutate(INVAR2_detection = ifelse(is.na(INVAR2_detection),"Not analysed",INVAR2_detection),
+    Detection_either = ifelse(InVisionFirst..Lung_detection=="Yes" | INVAR2_detection=="Yes", TRUE, FALSE))
+
+supp_new<-supp_new%>%
+  select(Patient,Age_category,Sex,	Smoking_history,	Months_smoking,	Months_quit,	Stage_diagnosis,	
+                            Histological_subtype,	Treatment_category,	T_volume_mm3,	Tumour_mutations_number,	
+                            InVisionFirst..Lung_detection,	InVisionFirst..Lung_mean_AF,	INVAR2_informative_reads,	INVAR2_fraction_IMAF,	
+                            INVAR2_detection,	Detection_either)%>%
+  arrange(Patient)
+
+
+supp_new
+supp_new <- lapply(supp_new, function(x) ifelse(is.na(x), "NA", x))
+# Ensure the data frame is still a data frame after lapply
+supp_new <- as.data.frame(supp_new)
+```
+
+## change the tumour mutations number column to match the mutlist corresponding amount
+```{r}
+mutLists<-read_excel("Supplement_LUCID_baseline_INVAR2_ChristinaZ_27Feb.xlsx",sheet = "Table 7", skip = 2)
+mutLists$Patient=as.character(mutLists$Patient)
+mutLists<-as.data.frame(mutLists)
+
+update_sum <- mutLists%>%group_by(Patient)%>%summarise(update_Tumour_mutations_number=n())
+supp_new<-supp_new %>% 
+  left_join(update_sum,by="Patient") %>% 
+  mutate(Tumour_mutations_number=update_Tumour_mutations_number) %>% 
+  select(-update_Tumour_mutations_number)
+
+print(supp_new %>% select(Patient,Tumour_mutations_number))
+# if update to table
+# writeData(demografics,excel_file,sheet = "patient_phenotype", startRow = 1, startCol = 1)
+# demografics<-read_excel(excel_file,sheet = "patient_phenotype", skip = 2,na = "NA",)
+mutLists%>%group_by(Panel_ID)%>%summarise(total=n())
+# calculate median
+me=as.vector(supp_new%>%filter(!is.na(Tumour_mutations_number))%>%select(Tumour_mutations_number))
+median(me$Tumour_mutations_number)
+```
+
+
+## Summary table for the detection (n=100)
+```{r}
+summary_table<-supp_new%>%
+  mutate(
+    INVAR2_fraction_IMAF = as.numeric(INVAR2_fraction_IMAF),
+    InVisionFirst..Lung_mean_AF = as.numeric(InVisionFirst..Lung_mean_AF)) %>%
+  mutate(
+    ctDNAfraction = case_when(
+      # If INVAR2_fraction_IMAF is NA, use InVisionFirst..Lung_mean_AF
+      is.na(INVAR2_fraction_IMAF) ~ InVisionFirst..Lung_mean_AF,
+      # If InVisionFirst..Lung_mean_AF is NA, use INVAR2_fraction_IMAF
+      is.na(InVisionFirst..Lung_mean_AF) ~ INVAR2_fraction_IMAF,
+      # If both are not NA, use the larger value
+      !is.na(INVAR2_fraction_IMAF) & !is.na(InVisionFirst..Lung_mean_AF) ~ pmax(INVAR2_fraction_IMAF, InVisionFirst..Lung_mean_AF)))
+
+
+table1<-summary_table%>%
+  group_by(Stage_diagnosis)%>%
+  summarize(
+  total=n(),
+  detection=sum(Detection_either),
+  detection_rate = format(signif(detection/total, digits = 2), scientific = FALSE) ,
+  Mean = format(signif(mean(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  SD = format(signif(sd(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Median = format(signif(median(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Min = format(signif(min(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Max = format(signif(max(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  IQR1 = format(signif(quantile(ctDNAfraction)[2], digits = 2), scientific = FALSE),
+  IQR3 = format(signif(quantile(ctDNAfraction)[4], digits = 2), scientific = FALSE))%>%
+  mutate(
+  `Detection (rate)`=paste0(detection , "/", total," (",(detection_rate),")"),
+  `Mean (SD)` = paste0(Mean," (",SD,")"),
+  `Median (Min, Max)` = paste0(Median," (",Min,", ",Max,")"),
+  IQR = paste0(IQR1,", ",IQR3))%>%
+  select(Variable = Stage_diagnosis,`Detection (rate)`,`Mean (SD)`,`Median (Min, Max)`,IQR)
+
+table2<-summary_table%>%
+  group_by(Histological_subtype)%>%
+  summarize(
+  total=n(),
+  detection=sum(Detection_either),
+  detection_rate = format(signif(detection/total, digits = 2), scientific = FALSE) ,
+  Mean = format(signif(mean(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  SD = format(signif(sd(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Median = format(signif(median(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Min = format(signif(min(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Max = format(signif(max(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  IQR1 = format(signif(quantile(ctDNAfraction)[2], digits = 2), scientific = FALSE),
+  IQR3 = format(signif(quantile(ctDNAfraction)[4], digits = 2), scientific = FALSE))%>%
+  mutate(
+  `Detection (rate)`=paste0(detection , "/", total," (",(detection_rate),")"),
+  `Mean (SD)` = paste0(Mean," (",SD,")"),
+  `Median (Min, Max)` = paste0(Median," (",Min,", ",Max,")"),
+  IQR = paste0(IQR1,", ",IQR3))%>%
+  select(Variable = Histological_subtype,`Detection (rate)`,`Mean (SD)`,`Median (Min, Max)`,IQR)
+
+
+table3<-summary_table%>%
+  summarize(
+  total=n(),
+  detection=sum(Detection_either),
+  detection_rate = format(signif(detection/total, digits = 2), scientific = FALSE) ,
+  Mean = format(signif(mean(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  SD = format(signif(sd(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Median = format(signif(median(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Min = format(signif(min(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  Max = format(signif(max(ctDNAfraction), digits = 2), scientific = FALSE) ,
+  IQR1 = format(signif(quantile(ctDNAfraction)[2], digits = 2), scientific = FALSE),
+  IQR3 = format(signif(quantile(ctDNAfraction)[4], digits = 2), scientific = FALSE))%>%
+  mutate(
+  `Detection (rate)`=paste0(detection , "/", total," (",(detection_rate),")"),
+  `Mean (SD)` = paste0(Mean," (",SD,")"),
+  `Median (Min, Max)` = paste0(Median," (",Min,", ",Max,")"),
+  IQR = paste0(IQR1,", ",IQR3),
+  Variable = "Overall")%>%
+  select(Variable,`Detection (rate)`,`Mean (SD)`,`Median (Min, Max)`,IQR)
+
+
+summary_table_100<-rbind(table1,table2,table3)%>%filter(Variable!="missing")
+summary_table_100
+```
+
+## output
+```{r}
+#### Add clinical outcome to the phenotype table
+# Survival info from NSCLC_RaDaR_paper
+RaDaR_data<-read_excel("NSCLC_RaDaR_paper/1-s2.0-S0923753422001235-mmc2.xlsx",sheet = "Table S1", skip = 3)
+
+supp_new_outcome<-supp_new%>%left_join(RaDaR_data%>%
+                       mutate(Patient=as.character(Patient))%>%
+                       select(Patient, "Outcome category",	"FFR event (freedom from recurrence)", "FFR date","OS event (overall survival)","OS date","CFS event (cancer free survival)", "CFS date")
+                     , by = "Patient")
+
+## output tables
+wb_out<-list(INVAR2_out,stage,subtype,treatment,overall_detection,supp_new_outcome,summary_table_100)
+wb_name<-c("Table 6","Table 7","Table 3","Table 8")
+tb_name<-c("Supplementary table 6: INVAR output mutation tracking table for the 90 patients.",
+           "Supplementary table 7: ctDNA detection summary for samples analysed with INVAR (>95% specificity)",
+           "Supplementary table 3: Summary of ctDNA detection per patient in this cohort. Detection is shown for both, the INVAR and InVisionFirst®-Lung assay.",
+           "Supplementary table 8: Summary of ctDNA levels by stage and tumour subtype. Data is shown for the analysis of all 100 patients. Subtype information was available for 96 samples only. SD – Standard deviation; Min – Minimum, Max – Maximum; IQR - Inter-quartile range. ")
+
+wb <- createWorkbook()
+addWorksheet(wb, wb_name[1])
+writeData(wb,wb_name[1],paste(tb_name[1]), startRow = 1, startCol = 1)
+writeData(wb, wb_name[1], wb_out[[1]], startRow = 3, startCol = 1) 
+addWorksheet(wb, wb_name[2])
+writeData(wb,wb_name[2],paste(tb_name[2]), startRow = 1, startCol = 1)
+writeData(wb, wb_name[2], wb_out[[2]], startRow = 3, startCol = 1)
+writeData(wb, wb_name[2], wb_out[[2]], startRow = 3, startCol = 1)
+writeData(wb, wb_name[2], wb_out[[3]], startRow = 4+nrow(wb_out[[2]]), startCol = 1) 
+writeData(wb, wb_name[2], wb_out[[4]], startRow = 5+nrow(wb_out[[2]])+nrow(wb_out[[3]]), startCol = 1) 
+writeData(wb, wb_name[2], wb_out[[5]], startRow = 6+nrow(wb_out[[2]])+nrow(wb_out[[3]])+nrow(wb_out[[4]]), startCol = 1)
+addWorksheet(wb, wb_name[3])
+writeData(wb,wb_name[3],paste(tb_name[3]), startRow = 1, startCol = 1)
+writeData(wb, wb_name[3], wb_out[[6]], startRow = 3, startCol = 1,na.string = "NA")
+addWorksheet(wb, wb_name[4])
+writeData(wb,wb_name[4],paste(tb_name[4]), startRow = 1, startCol = 1)
+writeData(wb, wb_name[4], wb_out[[7]], startRow = 3, startCol = 1)
+
+
+# Save the workbook to a file
+saveWorkbook(wb, file = "supplement_LUCID_baseline_INVAR2_ChristinaZ_02Apr_INVAR_only.xlsx", overwrite = TRUE)
+```
+
+
+
